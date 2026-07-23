@@ -1,0 +1,18 @@
+{
+  "name": "capi",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "latest",
+    "playwright": "^1.61.1"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@clack/prompts": "^1.7.0",
+    "citty": "^0.2.2",
+    "consola": "^3.4.2"
+  }
+}
