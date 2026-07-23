@@ -1,6 +1,31 @@
 import { defineCommand } from "citty";
 import * as prompts from "@clack/prompts";
-import { saveDsSessionId, loadSession } from "../auth/deepseek.ts";
+import consola from "consola";
+import { saveDsSessionId, loadSession, getSessionStatus } from "../auth/deepseek.ts";
+
+const statusCommand = defineCommand({
+  meta: {
+    name: "status",
+    description: "Verificar el estado actual de la sesión guardada",
+  },
+  run() {
+    const status = getSessionStatus();
+    if (!status.hasSession) {
+      consola.warn("No hay sesión guardada. Ejecuta 'capi capture'.");
+      return;
+    }
+
+    consola.info("Estado de la sesión:");
+    consola.log(`  • Auth Token:   ${status.hasAuth ? "✅ Presente" : "❌ Falta"}`);
+    consola.log(`  • Thumbcache:   ${status.hasThumbcache ? "✅ Presente" : "❌ Falta"}`);
+    consola.log(`  • AWS WAF:      ${status.hasAwsWaf ? "✅ Presente" : "❌ Falta"}`);
+    consola.log(`  • DS Session:   ${status.hasDsSessionId ? "✅ Presente" : "❌ Falta (HttpOnly)"}`);
+    if (status.capturedAt) {
+      consola.log(`  • Capturada en:  ${new Date(status.capturedAt).toLocaleString("es-ES")}`);
+    }
+    consola.log(`  • Válida:       ${!status.isExpired ? "✅ Sí" : "⚠️ Incompleta o Expirada"}`);
+  },
+});
 
 export const authCommand = defineCommand({
   meta: {
@@ -8,12 +33,14 @@ export const authCommand = defineCommand({
     description: "Gestionar credenciales de plataformas",
   },
   subCommands: {
+    status: statusCommand,
     deepseek: defineCommand({
       meta: {
         name: "deepseek",
         description: "Configurar credenciales de DeepSeek",
       },
       subCommands: {
+        status: statusCommand,
         setDsSession: defineCommand({
           meta: {
             name: "set-ds-session",
@@ -52,3 +79,4 @@ export const authCommand = defineCommand({
     }),
   },
 });
+

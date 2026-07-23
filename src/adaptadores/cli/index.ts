@@ -1,0 +1,1 @@
+export { AdaptadorConsola } from "./AdaptadorConsola";

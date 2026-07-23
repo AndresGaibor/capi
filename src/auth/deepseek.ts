@@ -1,4 +1,4 @@
-import { writeFileSync, readFileSync, existsSync } from "node:fs";
+import { writeFileSync, readFileSync, existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 
 const CACHE_DIR = join(process.env.HOME ?? ".", ".cache", "capi");
@@ -27,7 +27,6 @@ export interface DeepSeekBundle {
 
 function ensureCacheDir(): void {
   try {
-    const { mkdirSync } = require("node:fs");
     mkdirSync(CACHE_DIR, { recursive: true });
   } catch {}
 }
@@ -55,6 +54,7 @@ export function saveDsSessionId(dsSessionId: string): void {
     awsWafToken: session?.awsWafToken ?? "",
     dsSessionId,
     capturedAt: session?.capturedAt ?? new Date().toISOString(),
+    expiresAt: session?.expiresAt,
   };
   saveSession(updated);
 }
@@ -62,15 +62,50 @@ export function saveDsSessionId(dsSessionId: string): void {
 export function isSessionExpired(session: DeepSeekSession | null): boolean {
   if (!session) return true;
   if (!session.authorization || !session.thumbcache || !session.awsWafToken) return true;
+  if (session.expiresAt && Date.now() > session.expiresAt) return true;
   return false;
 }
 
 export function parseBundle(bundle: DeepSeekBundle): DeepSeekSession {
+  const existing = loadSession();
   return {
-    authorization: bundle.authorization ?? "",
-    thumbcache: bundle.cookies?.thumbcache ?? "",
-    awsWafToken: bundle.cookies?.awsWafToken ?? "",
-    dsSessionId: bundle.cookies?.dsSessionId ?? loadSession()?.dsSessionId,
+    authorization: bundle.authorization ?? existing?.authorization ?? "",
+    thumbcache: bundle.cookies?.thumbcache ?? existing?.thumbcache ?? "",
+    awsWafToken: bundle.cookies?.awsWafToken ?? existing?.awsWafToken ?? "",
+    dsSessionId: bundle.cookies?.dsSessionId ?? existing?.dsSessionId,
     capturedAt: bundle.capturedAt ?? new Date().toISOString(),
   };
 }
+
+export function getSessionStatus(): {
+  hasSession: boolean;
+  hasAuth: boolean;
+  hasThumbcache: boolean;
+  hasAwsWaf: boolean;
+  hasDsSessionId: boolean;
+  capturedAt?: string;
+  isExpired: boolean;
+} {
+  const session = loadSession();
+  if (!session) {
+    return {
+      hasSession: false,
+      hasAuth: false,
+      hasThumbcache: false,
+      hasAwsWaf: false,
+      hasDsSessionId: false,
+      isExpired: true,
+    };
+  }
+
+  return {
+    hasSession: true,
+    hasAuth: Boolean(session.authorization),
+    hasThumbcache: Boolean(session.thumbcache),
+    hasAwsWaf: Boolean(session.awsWafToken),
+    hasDsSessionId: Boolean(session.dsSessionId),
+    capturedAt: session.capturedAt,
+    isExpired: isSessionExpired(session),
+  };
+}
+

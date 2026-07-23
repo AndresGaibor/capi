@@ -1,0 +1,1 @@
+export { AdaptadorApiDeepSeek } from "./AdaptadorApiDeepSeek";

@@ -1,0 +1,1 @@
+export { AdaptadorKimiWebBridge } from "./AdaptadorKimiWebBridge";

@@ -1,0 +1,1 @@
+export { AdaptadorIndexedDB } from "./AdaptadorIndexedDB";

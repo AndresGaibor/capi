@@ -6,6 +6,8 @@ import consola from "consola";
 
 const BRIDGE_PORT = 3847;
 
+const clientesSSE = new Map<string, ReadableStreamDefaultController>();
+
 function killPort(port: number): Promise<void> {
   return new Promise((resolve) => {
     const child = spawn("lsof", ["-ti", `:${port}`], { stdio: "pipe" });
@@ -22,6 +24,17 @@ function killPort(port: number): Promise<void> {
   });
 }
 
+function enviarEventoSSE(sessionId: string, evento: string, data: unknown): void {
+  const controller = clientesSSE.get(sessionId);
+  if (!controller) return;
+  try {
+    const sseData = `event: ${evento}\ndata: ${JSON.stringify(data)}\n\n`;
+    controller.enqueue(new TextEncoder().encode(sseData));
+  } catch {
+    clientesSSE.delete(sessionId);
+  }
+}
+
 export const serveCommand = defineCommand({
   meta: {
     name: "serve",
@@ -34,6 +47,7 @@ export const serveCommand = defineCommand({
     const server = Bun.serve({
       port: BRIDGE_PORT,
       hostname: "0.0.0.0",
+      idleTimeout: 0,
 
       async fetch(req) {
         const url = new URL(req.url);
@@ -65,6 +79,47 @@ export const serveCommand = defineCommand({
           return new Response(JSON.stringify({ status: "ok" }), {
             headers: { "Content-Type": "application/json" },
           });
+        }
+
+        if (url.pathname === "/api/deepseek/stream" && req.method === "GET") {
+          const sessionId = url.searchParams.get("session") ?? "default";
+          console.log(`[bridge] Cliente SSE conectado: ${sessionId}`);
+
+          const stream = new ReadableStream({
+            start(controller) {
+              clientesSSE.set(sessionId, controller);
+              const sseBienvenida = `event: connected\ndata: ${JSON.stringify({ sessionId })}\n\n`;
+              controller.enqueue(new TextEncoder().encode(sseBienvenida));
+            },
+            cancel() {
+              clientesSSE.delete(sessionId);
+              console.log(`[bridge] Cliente SSE desconectado: ${sessionId}`);
+            },
+          });
+
+          return new Response(stream, {
+            headers: {
+              "Content-Type": "text/event-stream",
+              "Cache-Control": "no-cache",
+              "Connection": "keep-alive",
+            },
+          });
+        }
+
+        if (url.pathname === "/api/deepseek/stream" && req.method === "POST") {
+          try {
+            const body = await req.json() as { session?: string; type?: string; data?: unknown };
+            const sessionId = body?.session ?? "default";
+            enviarEventoSSE(sessionId, body?.type ?? "message", body?.data);
+            return new Response(JSON.stringify({ ok: true }), {
+              headers: { "Content-Type": "application/json" },
+            });
+          } catch (e) {
+            return new Response(JSON.stringify({ ok: false, error: String(e) }), {
+              status: 400,
+              headers: { "Content-Type": "application/json" },
+            });
+          }
         }
 
         return new Response("Not Found", { status: 404 });

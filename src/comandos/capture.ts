@@ -27,7 +27,7 @@ async function ensureBridge(): Promise<void> {
     const res = await fetch("http://localhost:3847/health");
     if (res.ok) return;
   } catch {}
-  const bunBin = "/Users/andresgaibor/.bun/bin/bun";
+  const bunBin = process.execPath || "bun";
   spawn(bunBin, ["run", join(process.cwd(), "src/cli.ts"), "serve"], {
     detached: true,
     stdio: "ignore",

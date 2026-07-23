@@ -1,0 +1,3 @@
+Este es un archivo de prueba para verificar la función de subida de archivos via CDP en CAPI CLI.
+Fecha: 2026-07-23.
+Módulo: Subida de adjuntos en DeepSeek.

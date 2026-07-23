@@ -71,10 +71,58 @@ Lista todas las sesiones de DeepSeek Chat.
 
 ```bash
 bun run src/cli.ts chat list
+bun run src/cli.ts chat list -n 5 -q "código"
 ```
 
-- Si no hay sesión, inicia bridge en background y espera (timeout 60s)
-- Si falta `ds_session_id`, pide ingresarlo manualmente
+- `-n, --limit <num>`: limita el número de conversaciones a listar.
+- `-q, --query <texto>`: filtra conversaciones por título.
+- Si no hay sesión, inicia bridge en background y espera.
+
+### `capi chat messages <id>`
+
+Muestra los mensajes de una conversación por ID.
+
+```bash
+bun run src/cli.ts chat messages <id>
+```
+
+- Abre la conversación en DeepSeek y primero intenta leer el historial desde `IndexedDB`
+- Usa la base `deepseek-chat` y el store `history-message` cuando está disponible
+- Si no encuentra el historial, cae al flujo visual de la UI como respaldo
+
+### `capi chat send <id> <prompt>`
+
+Envía un mensaje a una conversación y muestra la respuesta.
+
+```bash
+bun run src/cli.ts chat send <id> "<prompt>" --model expert --file "./doc.pdf"
+```
+
+- Parámetros opcionales: `--model <default|expert|vision>`, `--deepthink`, `--search`, `-f, --file <ruta>`
+- Abre la conversación en DeepSeek via Kimi WebBridge
+- Usa el textarea de la página (con setter nativo de React) para inyectar el prompt
+- Hace click en el botón de enviar
+- Pollea el DOM esperando la respuesta (DeepThink + respuesta)
+- Imprime ambos en streaming a medida que aparecen
+
+### `capi chat model <id>`
+
+Consulta el modelo/modo activo de una conversación inspeccionando el header de DeepSeek.
+
+```bash
+bun run src/cli.ts chat model <id>
+```
+
+- Muestra el modelo activo en la conversación (ej: `Expert`, `Instant`, `DeepThink`).
+- Nota: Las conversaciones ya iniciadas no permiten cambiar de modelo.
+
+### `capi auth status`
+
+Verifica el estado de las credenciales de sesión guardadas.
+
+```bash
+bun run src/cli.ts auth status
+```
 
 ### `capi auth deepseek setDsSession`
 
