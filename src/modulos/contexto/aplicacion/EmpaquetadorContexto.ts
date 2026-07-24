@@ -2,12 +2,14 @@ import { mkdirSync, readFileSync, statSync, existsSync, readdirSync } from "node
 import { basename, isAbsolute, join, relative, resolve, sep } from "node:path";
 
 export interface OmisionContexto { ruta: string; motivo: string }
+export interface ArchivoIncluidoContexto { ruta: string; hash: string; bytes: number; motivo: string }
 export interface ResultadoPaqueteContexto {
   ruta: string;
   hash: string;
   bytes: number;
   tokensEstimados: number;
   archivosIncluidos: number;
+  archivos: ArchivoIncluidoContexto[];
   omitidos: OmisionContexto[];
   truncados: string[];
   desdeCache: boolean;
@@ -18,6 +20,7 @@ export interface SolicitudPaqueteContexto {
   fuentes: string[];
   maxBytes?: number;
   contenidoAdicional?: Array<{ nombre: string; contenido: string }>;
+  motivos?: Record<string, string[]>;
 }
 
 const DIRECTORIOS_IGNORADOS = new Set([".git", "node_modules", "dist", "build", "coverage", ".next", ".nuxt", ".turbo", ".cache", "target", "vendor"]);
@@ -88,6 +91,7 @@ export class EmpaquetadorContexto {
     const maxBytes = Math.max(1024, solicitud.maxBytes ?? 4 * 1024 * 1024);
     const omitidos: OmisionContexto[] = [];
     const truncados: string[] = [];
+    const archivos: ArchivoIncluidoContexto[] = [];
     const entradas: Array<{ nombre: string; contenido: string }> = [];
     const rutas = await expandirFuentes(cwd, solicitud.fuentes);
 
@@ -120,6 +124,8 @@ export class EmpaquetadorContexto {
         truncados.push(entrada.nombre);
       }
       salida += inicio + contenido + fin;
+      const hashArchivo = new Bun.CryptoHasher("sha256").update(entrada.contenido).digest("hex");
+      archivos.push({ ruta: entrada.nombre, hash: hashArchivo, bytes: Buffer.byteLength(contenido), motivo: solicitud.motivos?.[entrada.nombre]?.join(", ") ?? "fuente solicitada" });
       incluidos++;
     }
     if (omitidos.length) salida += `\n===== OMITIDOS =====\n${omitidos.map((o) => `- ${o.ruta}: ${o.motivo}`).join("\n")}\n`;
@@ -130,6 +136,6 @@ export class EmpaquetadorContexto {
     const desdeCache = existsSync(ruta);
     if (!desdeCache) await Bun.write(ruta, salida);
     const bytes = Buffer.byteLength(salida);
-    return { ruta, hash, bytes, tokensEstimados: Math.ceil(salida.length / 4), archivosIncluidos: incluidos, omitidos, truncados, desdeCache };
+    return { ruta, hash, bytes, tokensEstimados: Math.ceil(salida.length / 4), archivosIncluidos: incluidos, archivos, omitidos, truncados, desdeCache };
   }
 }

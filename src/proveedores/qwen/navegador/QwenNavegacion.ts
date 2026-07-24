@@ -1,11 +1,12 @@
 import { ErrorPaginaProveedor, ErrorProveedorNoDisponible } from "../../../nucleo/errores/ErroresAplicacion";
 import type { TransporteNavegador } from "../../../plataforma/webbridge/TransporteNavegador";
 import { SELECTORES_QWEN } from "../selectores/SelectoresQwen";
+import type { GestorPestanas } from "../../../plataforma/webbridge/GestorPestanas";
 
 const dormir = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export class QwenNavegacion {
-  constructor(private readonly transporte: TransporteNavegador, private readonly pausa: (ms:number)=>Promise<unknown> = dormir) {}
+  constructor(private readonly transporte: TransporteNavegador, private readonly pausa: (ms:number)=>Promise<unknown> = dormir, private readonly gestorPestanas?: GestorPestanas) {}
 
   async verificarDisponibilidad(): Promise<void> {
     if (!(await this.transporte.estaDisponible())) {
@@ -33,6 +34,7 @@ export class QwenNavegacion {
     }
 
     if (!yaAbierta) {
+      if (nuevaPestana) await this.gestorPestanas?.validarNuevaPestana("qwen");
       await this.transporte.navegar(url, nuevaPestana, "CAPI Qwen");
       await this.pausa(5000);
     }

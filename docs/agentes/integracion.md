@@ -13,11 +13,14 @@ capi chat --dry-run --output json "Revisa el proyecto"
 capi chat --output jsonl "Revisa el proyecto"
 capi chat -f src,test --diff --limite-contexto 4194304 --output jsonl "Revisa los cambios"
 capi chat -f archivo.txt --no-empaquetar --output jsonl "Lee el archivo"
+capi chat --contexto-auto --incremental --resumen --output jsonl "Continúa el trabajo"
+capi contexto explicar --automatico -p qwen -m max --output json
+capi historial listar --output json
 ```
 
 Los sobres no streaming usan el protocolo `capi.agent.v1` con `ok`, `command`, `requestId`, `data`, `error` y `suggestions`. La salida estructurada nunca contiene ANSI.
 
-Las fuentes de contexto pueden ser archivos, directorios, globs, listas por comas, JSON o un manifiesto `@ruta`. CAPI las empaqueta por defecto en un único `.txt`, excluye secretos y binarios, informa truncamientos y reutiliza la caché por contenido. Usa `--no-empaquetar` cuando el agente necesite conservar adjuntos separados.
+Las fuentes de contexto pueden ser archivos, directorios, globs, listas por comas, JSON o un manifiesto `@ruta`. El modo automático usa Git, imports relativos, pruebas relacionadas y archivos base. El modo incremental compara hashes por conversación y solo reenvía cambios. CAPI las empaqueta por defecto en un único `.txt`, excluye secretos y binarios, informa truncamientos y reutiliza la caché por contenido. Usa `--no-empaquetar` cuando el agente necesite conservar adjuntos separados.
 
 ## MCP
 
@@ -47,7 +50,13 @@ Herramientas expuestas:
 - `capi_project_current`
 - `capi_conversations_project`
 - `capi_doctor`
+- `capi_context_pack`
+- `capi_context_explain`
+- `capi_history_project`
+- `capi_diagnostics_contracts`
 - `capi_chat`
+
+DeepSeek consulta su historial autenticado únicamente dentro de la pestaña cuando el DOM virtual todavía no monta la respuesta; CAPI no persiste ni muestra el token.
 
 El MCP no duplica reglas: delega al mismo gestor de proyectos, conversaciones, proveedores, recuperación y persistencia que la CLI.
 

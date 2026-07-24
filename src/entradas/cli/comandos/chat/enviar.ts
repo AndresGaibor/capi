@@ -16,6 +16,9 @@ export const argumentosChat = {
   diff: { type: "boolean" as const, description: "Incluir git diff staged y unstaged" },
   limiteContexto: { type: "string" as const, description: "Máximo del paquete de contexto en bytes" },
   empaquetar: { type: "boolean" as const, default: true, description: "Combinar fuentes en un único archivo de contexto" },
+  contextoAuto: { type: "boolean" as const, default: false, description: "Seleccionar automáticamente archivos Git, imports y pruebas relacionadas" },
+  incremental: { type: "boolean" as const, default: false, description: "Omitir archivos sin cambios ya enviados a la conversación" },
+  resumen: { type: "boolean" as const, default: false, description: "Adjuntar el resumen persistente de la conversación" },
   nueva: { type: "boolean" as const, description: "Forzar una conversación nueva" },
   fallback: { type: "boolean" as const, default: true, description: "Permitir reintentos y degradación inteligente" },
   output: { type: "string" as const, alias: "o", default: "human", description: "human|markdown|json|jsonl" },
@@ -40,7 +43,7 @@ export async function ejecutarChat(args: Record<string, unknown>): Promise<void>
 
   if (args.dryRun) {
     const fuentes = interpretarFuentesContexto(args.archivo ? String(args.archivo) : undefined);
-    const plan = { project: proyecto, provider: proveedor, model: modelo ?? "default", selection: args.nueva ? { motivo: "nueva" } : seleccion, fallback: Boolean(args.fallback), context: { sources: fuentes, includeGitDiff: Boolean(args.diff), maxBytes: args.limiteContexto ? Number(args.limiteContexto) : 4 * 1024 * 1024, bundledAsSingleTextFile: args.empaquetar !== false }, actions: ["seleccionar conversación", "preparar contexto", "adquirir lease", "navegar proveedor", "enviar prompt", "registrar conversación"] };
+    const plan = { project: proyecto, provider: proveedor, model: modelo ?? "default", selection: args.nueva ? { motivo: "nueva" } : seleccion, fallback: Boolean(args.fallback), context: { sources: fuentes, automatic: Boolean(args.contextoAuto), incremental: Boolean(args.incremental), includeSummary: Boolean(args.resumen), includeGitDiff: Boolean(args.diff), maxBytes: args.limiteContexto ? Number(args.limiteContexto) : undefined, bundledAsSingleTextFile: args.empaquetar !== false }, actions: ["seleccionar conversación", "preparar contexto", "adquirir lease", "navegar proveedor", "enviar prompt", "registrar conversación"] };
     const sobre = crearSobreExito("chat.send.dry-run", plan, { requestId });
     process.stdout.write(serializarSalida(sobre, formato === "human" ? "markdown" : formato) + "\n");
     return;
@@ -50,7 +53,7 @@ export async function ejecutarChat(args: Record<string, unknown>): Promise<void>
     const eventos = app.enviarMensaje.ejecutar(proveedor, {
       conversacionId, prompt: String(args.prompt), modelo,
       archivos: interpretarFuentesContexto(args.archivo ? String(args.archivo) : undefined),
-      contexto: { incluirDiff: Boolean(args.diff), maxBytes: args.limiteContexto ? Number(args.limiteContexto) : undefined, empaquetar: args.empaquetar !== false },
+      contexto: { incluirDiff: Boolean(args.diff), maxBytes: args.limiteContexto ? Number(args.limiteContexto) : undefined, empaquetar: args.empaquetar !== false, automatico: Boolean(args.contextoAuto), incremental: Boolean(args.incremental), incluirResumen: Boolean(args.resumen) },
       forzarNueva: Boolean(args.nueva), permitirFallback: Boolean(args.fallback),
       opciones: { razonamiento: args.razonamiento === undefined ? preferencias?.razonamiento : Boolean(args.razonamiento), busquedaWeb: args.busqueda === undefined ? preferencias?.busquedaWeb : Boolean(args.busqueda) },
     });

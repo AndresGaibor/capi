@@ -28,6 +28,8 @@
     "verify": "bun run typecheck && bun test && bun run coverage",
     "mcp": "bun run src/mcp.ts",
     "agent:discover": "bun run src/cli.ts discover --output json",
-    "smoke:mcp": "bun run scripts/smoke-mcp.ts"
+    "smoke:mcp": "bun run scripts/smoke-mcp.ts",
+    "smoke:archivo:qwen": "bun run scripts/smoke-archivo.ts qwen",
+    "smoke:archivo:deepseek": "bun run scripts/smoke-archivo.ts deepseek"
   }
 }

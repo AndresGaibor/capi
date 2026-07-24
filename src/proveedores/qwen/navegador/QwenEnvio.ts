@@ -1,21 +1,24 @@
 import { basename } from "node:path";
 import { readFileSync } from "node:fs";
-import { ErrorPaginaProveedor } from "../../../nucleo/errores/ErroresAplicacion";
+import { ErrorPaginaProveedor, ErrorTimeoutProveedor } from "../../../nucleo/errores/ErroresAplicacion";
 import type { TransporteNavegador } from "../../../plataforma/webbridge/TransporteNavegador";
 import { scriptEnviarPromptQwen } from "../scripts/enviarPrompt";
+import type { EstrategiaAdjuntos, ResultadoAdjuntos } from "../../../nucleo/archivos/EstrategiaAdjuntos";
 
 const TAMANO_FRAGMENTO_BASE64 = 256 * 1024;
 
-export class QwenEnvio {
+export class QwenEnvio implements EstrategiaAdjuntos {
+  readonly nombre = "qwen-dom-data-transfer";
   constructor(
     private readonly transporte: TransporteNavegador,
     private readonly pausa: (ms:number)=>Promise<unknown> = (ms)=>new Promise(r=>setTimeout(r,ms)),
   ) {}
 
-  async adjuntar(rutas: string[] = []): Promise<void> {
-    if (!rutas.length) return;
+  async adjuntar(rutas: string[] = []): Promise<ResultadoAdjuntos> {
+    if (!rutas.length) return { estrategia: this.nombre, archivos: [] };
     await this.limpiarAdjuntosResiduales();
     for (const ruta of rutas) await this.adjuntarUno(ruta);
+    return { estrategia: this.nombre, archivos: [...rutas] };
   }
 
   private async limpiarAdjuntosResiduales(): Promise<void> {
@@ -36,17 +39,24 @@ export class QwenEnvio {
   }
 
   private async prepararSelectorDeArchivos(): Promise<void> {
-    const resultado = await this.transporte.evaluar<{ ok: boolean; error?: string }>(`(() => {
-      document.querySelector('.mode-select-open')?.click();
-      const opcion = document.querySelector('[data-menu-id$="-upload"]');
-      if (!opcion) return { ok:false, error:'No se encontró la opción de subir archivo de Qwen' };
-      opcion.click();
-      return { ok:true };
-    })()`);
-    if (!resultado.value?.ok) {
-      throw new ErrorPaginaProveedor(resultado.value?.error ?? "Qwen no habilitó el selector de archivos");
+    await this.transporte.evaluar(`document.querySelector('.mode-select-open')?.click()`);
+    for (let intento = 0; intento < 20; intento++) {
+      const resultado = await this.transporte.evaluar<{ ok: boolean }>(`(() => {
+        const opcion = document.querySelector('[data-menu-id$="-upload"], [role="menuitem"]');
+        const candidata = opcion?.getAttribute('data-menu-id')?.endsWith('-upload')
+          ? opcion
+          : [...document.querySelectorAll('[role="menuitem"]')].find(e => /subir archivo|upload file/i.test(e.textContent || ''));
+        if (!candidata) return { ok:false };
+        candidata.click();
+        return { ok:true };
+      })()`);
+      if (resultado.value?.ok) {
+        await this.pausa(150);
+        return;
+      }
+      await this.pausa(100);
     }
-    await this.pausa(150);
+    throw new ErrorPaginaProveedor("No se encontró la opción de subir archivo de Qwen");
   }
 
   private async adjuntarUno(ruta: string): Promise<void> {
@@ -76,20 +86,24 @@ export class QwenEnvio {
     })()`);
     if (!resultado.value?.ok) throw new ErrorPaginaProveedor(resultado.value?.error ?? "Qwen rechazó el archivo");
 
+    let listoConsecutivo = 0;
     for (let intento = 0; intento < 120; intento++) {
       const estado = await this.transporte.evaluar<{ visible: boolean; procesando: boolean; error: string }>(`(() => {
         const texto = document.body.innerText || '';
         const visible = texto.includes(${JSON.stringify(nombre.replace(/\.txt$/i, ""))});
-        const procesando = /Analizando\.\.\.|Parsing\.\.\.|Uploading\.\.\./i.test(texto);
-        const error = [...document.querySelectorAll('[role="alert"], .ant-message-error, [class*="error"]')]
+        const alerta = [...document.querySelectorAll('[role="alert"], .ant-message-error, [class*="error"]')]
           .map(e => (e.innerText || e.textContent || '').trim()).filter(Boolean).at(-1) || '';
+        const alertaTransitoria = /aún hay archivos cargándose|archivos cargando|still (?:uploading|loading)|wait for (?:the )?upload|espera a que la carga/i.test(alerta);
+        const procesando = /Analizando\.\.\.|Parsing\.\.\.|Uploading\.\.\./i.test(texto) || alertaTransitoria;
+        const error = alertaTransitoria ? '' : alerta;
         return { visible, procesando, error };
       })()`);
       if (estado.value?.error) throw new ErrorPaginaProveedor(`Qwen no pudo procesar ${nombre}: ${estado.value.error}`);
-      if (estado.value?.visible && !estado.value.procesando) return;
+      listoConsecutivo = estado.value?.visible && !estado.value.procesando ? listoConsecutivo + 1 : 0;
+      if (listoConsecutivo >= 8) return;
       await this.pausa(500);
     }
-    throw new ErrorPaginaProveedor(`Qwen no confirmó el procesamiento de ${nombre}`);
+    throw new ErrorTimeoutProveedor(`Timeout procesando el archivo ${nombre} en Qwen`);
   }
 
   async enviar(prompt: string): Promise<void> {

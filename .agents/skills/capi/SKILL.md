@@ -14,9 +14,10 @@ Usa CAPI cuando necesites una segunda opinión, investigación, revisión de có
 1. Si desconoces la versión o capacidades, ejecuta `capi discover --output json`.
 2. Consulta `capi schema chat.send --output json` antes de usar argumentos poco habituales.
 3. Para comprobar decisiones sin efectos, ejecuta `capi chat --dry-run --output json "<prompt>"`.
-4. Para enviar, usa `capi chat --output jsonl "<prompt>"`.
-5. Lee una línea JSON por evento hasta `event="completed"`.
-6. Si recibes un sobre con `ok=false`, examina `error.retryable`, `error.code` y `suggestions`.
+4. Para tareas de código usa `capi chat --contexto-auto --incremental --resumen --output jsonl "<prompt>"`.
+5. Antes de un envío grande usa `capi contexto explicar --automatico --output json`.
+6. Lee una línea JSON por evento hasta `event="completed"`.
+7. Si recibes un sobre con `ok=false`, examina `error.retryable`, `error.code` y `suggestions`.
 
 ## Selección de proveedor
 
@@ -45,3 +46,12 @@ No mezcles stdout estructurado con análisis de stderr. No dependas de colores, 
 capi chat -p qwen -m preview --output jsonl --request-id revision-42 \
   "Revisa el diff actual y devuelve riesgos, correcciones y pruebas faltantes."
 ```
+
+
+## Contexto inteligente
+
+- `--contexto-auto`: incluye cambios Git, dependencias relativas, pruebas y archivos base.
+- `--incremental`: omite contenido sin cambios ya enviado a la conversación.
+- `--resumen`: añade el resumen persistente de interacciones anteriores.
+- `capi contexto explicar`: audita presupuesto, inclusión, omisión, redacción y truncamiento.
+- `capi historial listar`: recupera modelo, conversación, rama, commit, contexto y estado de cada ejecución.

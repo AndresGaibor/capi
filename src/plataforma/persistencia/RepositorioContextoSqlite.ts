@@ -59,7 +59,23 @@ export class RepositorioContextoSqlite {
         proyecto_local_id TEXT PRIMARY KEY REFERENCES proyectos_locales(id) ON DELETE CASCADE,
         proveedor TEXT, modelo TEXT, razonamiento INTEGER, busqueda_web INTEGER
       );
-      PRAGMA user_version=3;
+      CREATE TABLE IF NOT EXISTS snapshots_contexto (
+        proyecto_local_id TEXT NOT NULL, proveedor TEXT NOT NULL, conversacion_id TEXT NOT NULL,
+        ruta TEXT NOT NULL, hash TEXT NOT NULL, enviado_en INTEGER NOT NULL,
+        PRIMARY KEY(proyecto_local_id, proveedor, conversacion_id, ruta)
+      );
+      CREATE TABLE IF NOT EXISTS ejecuciones_historial (
+        id TEXT PRIMARY KEY, proyecto_local_id TEXT NOT NULL, proveedor TEXT NOT NULL, modelo TEXT,
+        conversacion_id TEXT, rama TEXT, commit_git TEXT, iniciado_en INTEGER NOT NULL, finalizado_en INTEGER,
+        estado TEXT NOT NULL, contexto_hash TEXT, archivos_json TEXT, respuesta_caracteres INTEGER NOT NULL DEFAULT 0,
+        error TEXT
+      );
+      CREATE TABLE IF NOT EXISTS resumenes_conversacion (
+        proyecto_local_id TEXT NOT NULL, proveedor TEXT NOT NULL, conversacion_id TEXT NOT NULL,
+        resumen TEXT NOT NULL, actualizado_en INTEGER NOT NULL,
+        PRIMARY KEY(proyecto_local_id, proveedor, conversacion_id)
+      );
+      PRAGMA user_version=6;
     `);
   }
 
@@ -191,9 +207,63 @@ export class RepositorioContextoSqlite {
     };
   }
 
+  obtenerHashesContexto(proyectoLocalId: string, proveedor: string, conversacionId: string): Record<string, string> {
+    const filas = this.db.query("SELECT ruta,hash FROM snapshots_contexto WHERE proyecto_local_id=? AND proveedor=? AND conversacion_id=?")
+      .all(proyectoLocalId, proveedor, conversacionId) as Array<{ ruta: string; hash: string }>;
+    return Object.fromEntries(filas.map(f => [f.ruta, f.hash]));
+  }
+
+  guardarSnapshotContexto(proyectoLocalId: string, proveedor: string, conversacionId: string, archivos: Array<{ ruta: string; hash: string }>, ahora = Date.now()): void {
+    const consulta = this.db.query(`INSERT INTO snapshots_contexto(proyecto_local_id,proveedor,conversacion_id,ruta,hash,enviado_en)
+      VALUES(?,?,?,?,?,?) ON CONFLICT(proyecto_local_id,proveedor,conversacion_id,ruta)
+      DO UPDATE SET hash=excluded.hash,enviado_en=excluded.enviado_en`);
+    this.db.transaction(() => { for (const archivo of archivos) consulta.run(proyectoLocalId, proveedor, conversacionId, archivo.ruta, archivo.hash, ahora); })();
+  }
+
+  iniciarEjecucionHistorial(entrada: { id: string; proyectoLocalId: string; proveedor: string; modelo?: string; conversacionId?: string; rama?: string; commitGit?: string; contextoHash?: string; archivos?: string[] }, ahora = Date.now()): void {
+    this.db.query(`INSERT INTO ejecuciones_historial(id,proyecto_local_id,proveedor,modelo,conversacion_id,rama,commit_git,iniciado_en,estado,contexto_hash,archivos_json)
+      VALUES($id,$proyecto,$proveedor,$modelo,$conversacion,$rama,$commit,$inicio,'en_progreso',$contexto,$archivos)`).run({
+      $id: entrada.id, $proyecto: entrada.proyectoLocalId, $proveedor: entrada.proveedor, $modelo: entrada.modelo ?? null,
+      $conversacion: entrada.conversacionId ?? null, $rama: entrada.rama ?? null, $commit: entrada.commitGit ?? null,
+      $inicio: ahora, $contexto: entrada.contextoHash ?? null, $archivos: JSON.stringify(entrada.archivos ?? []),
+    });
+  }
+
+  finalizarEjecucionHistorial(id: string, entrada: { estado: "completada" | "fallida"; conversacionId?: string; modelo?: string; contextoHash?: string; archivos?: string[]; respuestaCaracteres?: number; error?: string }, ahora = Date.now()): void {
+    this.db.query(`UPDATE ejecuciones_historial SET finalizado_en=$fin,estado=$estado,
+      conversacion_id=COALESCE($conversacion,conversacion_id),modelo=COALESCE($modelo,modelo),
+      contexto_hash=COALESCE($contexto,contexto_hash),archivos_json=COALESCE($archivos,archivos_json),
+      respuesta_caracteres=$caracteres,error=$error WHERE id=$id`).run({
+      $id: id, $fin: ahora, $estado: entrada.estado, $conversacion: entrada.conversacionId ?? null,
+      $modelo: entrada.modelo ?? null, $contexto: entrada.contextoHash ?? null,
+      $archivos: entrada.archivos ? JSON.stringify(entrada.archivos) : null,
+      $caracteres: entrada.respuestaCaracteres ?? 0, $error: entrada.error?.slice(0, 2000) ?? null,
+    });
+  }
+
+  listarHistorialProyecto(proyectoLocalId: string, limite = 20): any[] {
+    return (this.db.query(`SELECT id,proveedor,modelo,conversacion_id AS conversacionId,rama,commit_git AS commitGit,
+      iniciado_en AS iniciadoEn,finalizado_en AS finalizadoEn,estado,contexto_hash AS contextoHash,
+      archivos_json AS archivosJson,respuesta_caracteres AS respuestaCaracteres,error
+      FROM ejecuciones_historial WHERE proyecto_local_id=? ORDER BY iniciado_en DESC LIMIT ?`).all(proyectoLocalId, limite) as any[])
+      .map(f => ({ ...f, archivos: JSON.parse(f.archivosJson || "[]"), archivosJson: undefined }));
+  }
+
+  guardarResumenConversacion(proyectoLocalId: string, proveedor: string, conversacionId: string, resumen: string, ahora = Date.now()): void {
+    this.db.query(`INSERT INTO resumenes_conversacion(proyecto_local_id,proveedor,conversacion_id,resumen,actualizado_en)
+      VALUES(?,?,?,?,?) ON CONFLICT(proyecto_local_id,proveedor,conversacion_id)
+      DO UPDATE SET resumen=excluded.resumen,actualizado_en=excluded.actualizado_en`).run(proyectoLocalId, proveedor, conversacionId, resumen.slice(0, 12000), ahora);
+  }
+
+  obtenerResumenConversacion(proyectoLocalId: string, proveedor: string, conversacionId: string): string | null {
+    const fila = this.db.query("SELECT resumen FROM resumenes_conversacion WHERE proyecto_local_id=? AND proveedor=? AND conversacion_id=?")
+      .get(proyectoLocalId, proveedor, conversacionId) as { resumen: string } | null;
+    return fila?.resumen ?? null;
+  }
+
   diagnosticar(): { disponible: boolean; esquema: number; ocupacionesActivas: number } {
     const integridad = this.db.query("PRAGMA quick_check").get() as Record<string, string>;
-    return { disponible: Object.values(integridad)[0] === "ok", esquema: 3, ocupacionesActivas: this.contarOcupacionesActivas() + this.contarEjecucionesActivas() };
+    return { disponible: Object.values(integridad)[0] === "ok", esquema: 6, ocupacionesActivas: this.contarOcupacionesActivas() + this.contarEjecucionesActivas() };
   }
   cerrar(): void { this.db.close(); }
 }

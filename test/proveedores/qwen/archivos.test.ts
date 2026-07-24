@@ -56,3 +56,26 @@ test("Qwen activa la opción de subir archivo antes de inyectar el File", async 
   expect(indiceMenu).toBeGreaterThanOrEqual(0);
   expect(indiceMenu).toBeLessThan(indiceArchivo);
 });
+
+
+test("Qwen trata el aviso de archivos cargándose como estado transitorio", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "capi-qwen-loading-"));
+  const ruta = join(dir, "contexto.txt");
+  writeFileSync(ruta, "contenido");
+  const transporte = new TransporteArchivo();
+  await new QwenEnvio(transporte as any, async () => {}).adjuntar([ruta]);
+  const scriptEstado = transporte.scripts.find(x => x.includes("alertaTransitoria")) ?? "";
+  expect(scriptEstado).toContain("aún hay archivos cargándose");
+  expect(scriptEstado).toContain("alertaTransitoria ? '' : alerta");
+});
+
+
+test("Qwen exige estabilidad antes de considerar listo el adjunto", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "capi-qwen-stable-"));
+  const ruta = join(dir, "contexto.txt");
+  writeFileSync(ruta, "contenido");
+  const transporte = new TransporteArchivo();
+  await new QwenEnvio(transporte as any, async () => {}).adjuntar([ruta]);
+  const sondeos = transporte.scripts.filter(x => x.includes("const texto = document.body.innerText"));
+  expect(sondeos.length).toBeGreaterThanOrEqual(8);
+});

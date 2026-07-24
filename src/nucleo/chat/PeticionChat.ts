@@ -8,6 +8,9 @@ export interface PeticionChat {
     incluirDiff?: boolean;
     maxBytes?: number;
     cwd?: string;
+    automatico?: boolean;
+    incremental?: boolean;
+    incluirResumen?: boolean;
   };
   nuevaPestana?: boolean;
   forzarNueva?: boolean;

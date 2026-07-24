@@ -13,7 +13,7 @@ src/
   entradas/     CLI y composition root
 ```
 
-Los casos de uso no conocen selectores DOM, WebBridge ni proveedores concretos. El contexto local usa `bun:sqlite`, leases renovables y un límite atómico de tres ejecuciones simultáneas. Cada proveedor encapsula navegación, modelos, envío y streaming. DeepSeek también implementa sesión, conversaciones y mensajes, con respaldo de IndexedDB cuando el DOM no expone la respuesta.
+Los casos de uso no conocen selectores DOM, WebBridge ni proveedores concretos. El contexto local usa `bun:sqlite`, leases renovables y un límite atómico de tres ejecuciones simultáneas. Cada proveedor encapsula navegación, modelos, envío y streaming. DeepSeek también implementa sesión, conversaciones y mensajes. Para recuperar respuestas usa el DOM y, como respaldos, IndexedDB y la API autenticada de historial dentro de la propia pestaña; el token nunca sale del navegador ni se registra.
 
 ## Requisitos
 
@@ -31,8 +31,12 @@ bun run src/cli.ts chat --nueva -p qwen -m preview "Hola"
 bun run src/cli.ts chat enviar -p qwen -m plus "Hola"
 bun run src/cli.ts chat enviar -p deepseek -m default "Hola"
 bun run src/cli.ts chat -f src,test --diff --limite-contexto 4194304 "Revisa los cambios"
+bun run src/cli.ts chat --contexto-auto --incremental --resumen "Continúa el trabajo"
 bun run src/cli.ts chat -f archivo.txt --no-empaquetar "Lee este archivo"
 bun run src/cli.ts contexto empaquetar --fuentes src,test --diff --output json
+bun run src/cli.ts contexto explicar --automatico -p qwen -m max --output json
+bun run src/cli.ts historial listar --limite 20 --output json
+bun run src/cli.ts diagnostico contratos --output json
 bun run src/cli.ts modelos listar -p qwen
 bun run src/cli.ts conversaciones listar -p deepseek
 bun run src/cli.ts conversaciones mensajes -p deepseek <id>
@@ -74,7 +78,7 @@ bun run src/cli.ts doctor --output json
 
 Formatos disponibles: `human`, `markdown`, `json` y `jsonl`. La salida estructurada usa `capi.agent.v1`, no contiene ANSI y conserva un `requestId` correlacionable. Los errores incluyen código, carácter reintentable y sugerencias ejecutables.
 
-El contexto acepta archivos, directorios, globs, JSON, listas por comas y manifiestos `@archivo`. Por defecto CAPI excluye secretos y binarios, combina las fuentes en un único `.txt`, puede añadir `git diff`, aplica un límite de bytes y reutiliza el paquete por hash. `--no-empaquetar` conserva los archivos originales cuando el proveedor debe recibirlos por separado.
+El contexto acepta archivos, directorios, globs, JSON, listas por comas y manifiestos `@archivo`. `--contexto-auto` selecciona cambios Git, imports relativos, pruebas relacionadas y archivos base; `--incremental` omite archivos sin cambios ya enviados a la conversación; `--resumen` añade el resumen persistente. Por defecto CAPI excluye secretos y binarios, combina las fuentes en un único `.txt`, puede añadir `git diff`, aplica un límite de bytes y reutiliza el paquete por hash. `--no-empaquetar` conserva los archivos originales cuando el proveedor debe recibirlos por separado.
 
 La recuperación automática usa `Qwen preview → max → plus`. DeepSeek puede degradar `expert/vision → default`, pero siempre abre un chat nuevo al cambiar de modelo. Usa `--no-fallback` cuando el modelo exacto sea obligatorio.
 
@@ -88,7 +92,7 @@ bun run mcp
 bun run src/cli.ts mcp
 ```
 
-Expone `capi_discover`, `capi_schema`, `capi_project_current`, `capi_conversations_project`, `capi_doctor` y `capi_chat`. Un descriptor genérico está en `mcp/capi.example.json`.
+Expone `capi_discover`, `capi_schema`, `capi_project_current`, `capi_conversations_project`, `capi_doctor`, `capi_context_pack`, `capi_context_explain`, `capi_history_project`, `capi_diagnostics_contracts` y `capi_chat`. Un descriptor genérico está en `mcp/capi.example.json`.
 
 Para agentes sin MCP, usa `AGENTS.md` y la skill portable `.agents/skills/capi/SKILL.md`. La guía completa está en `docs/agentes/integracion.md`.
 
@@ -105,13 +109,15 @@ bun run coverage
 bun run verify
 bun run smoke:qwen
 bun run smoke:deepseek
+bun run smoke:archivo:deepseek
+bun run smoke:archivo:qwen
 ```
 
-`bun run verify` ejecuta TypeScript, toda la suite y una puerta mínima de 80% de cobertura de líneas para las capas modulares. Los smokes requieren WebBridge y comprueban el recorrido real prompt → respuesta → fin. El smoke de Qwen termina cada intento después de 75 segundos para evitar bloqueos indefinidos; puede ajustarse con `CAPI_SMOKE_TIMEOUT_MS`.
+`bun run verify` ejecuta TypeScript, toda la suite y una puerta mínima de 80% de cobertura de líneas para las capas modulares. Los smokes requieren WebBridge y comprueban el recorrido real prompt → respuesta → fin. Los smokes de archivos usan un límite de 90 segundos por defecto para evitar bloqueos indefinidos; puede ajustarse con `CAPI_SMOKE_TIMEOUT_MS`. Qwen puede devolver alta demanda o finalizar sin contenido aunque la carga del adjunto haya sido correcta; en ese caso CAPI ofrece el fallback exacto a DeepSeek.
 
 ## Pruebas
 
-La suite cubre contratos, casos de uso, composición, CLI, reglas arquitectónicas, navegación, selección de modelos, envío, streaming, errores, fixtures DOM, respuestas A/B, respuesta vacía y respaldo IndexedDB.
+La suite cubre contratos, casos de uso, composición, CLI, reglas arquitectónicas, navegación, selección de modelos, envío, streaming, errores, fixtures DOM, respuestas A/B, respuesta vacía, respaldo IndexedDB, historial autenticado, contexto incremental y estrategias de adjuntos.
 
 ## Reglas arquitectónicas
 

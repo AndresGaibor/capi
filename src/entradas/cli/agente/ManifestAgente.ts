@@ -13,7 +13,7 @@ const comandos: EsquemaComandoAgente[] = [
     name: "chat.send", description: "Enviar un prompt con contexto automático del proyecto, recuperación de modelo y bloqueo de concurrencia.",
     inputSchema: { type: "object", additionalProperties: false, required: ["prompt"], properties: {
       prompt: { type: "string", minLength: 1 }, provider: { type: "string", enum: ["qwen", "deepseek"] }, model: { type: "string" }, conversationId: { type: "string" },
-      newConversation: { type: "boolean", default: false }, reasoning: { type: "boolean" }, webSearch: { type: "boolean" }, files: { type: "array", items: { type: "string" }, description: "Archivos, directorios o globs. CAPI los combina en un único .txt seguro." }, includeGitDiff: { type: "boolean", default: false }, maxContextBytes: { type: "integer", minimum: 1024, default: 4194304 }, bundleContext: { type: "boolean", default: true, description: "Combinar las fuentes en un único archivo antes de enviarlas." },
+      newConversation: { type: "boolean", default: false }, reasoning: { type: "boolean" }, webSearch: { type: "boolean" }, files: { type: "array", items: { type: "string" }, description: "Archivos, directorios o globs. CAPI los combina en un único .txt seguro." }, includeGitDiff: { type: "boolean", default: false }, automaticContext: { type: "boolean", default: false }, incrementalContext: { type: "boolean", default: false }, includeConversationSummary: { type: "boolean", default: false }, maxContextBytes: { type: "integer", minimum: 1024 }, bundleContext: { type: "boolean", default: true, description: "Combinar las fuentes en un único archivo antes de enviarlas." },
       fallback: { type: "boolean", default: true }, dryRun: { type: "boolean", default: false }, explain: { type: "boolean", default: false }, output,
     } },
     behavior: { nonInteractive: true, streaming: true, idempotent: false, sideEffects: ["navega una pestaña", "envía un mensaje", "actualiza historial local"] },
@@ -30,6 +30,21 @@ const comandos: EsquemaComandoAgente[] = [
     } },
     behavior: { nonInteractive: true, streaming: false, idempotent: true, sideEffects: ["crea o reutiliza un archivo de caché local"] },
     errors: [{ code: "CONTEXTO_INVALIDO", retryable: false, recovery: "Corrige rutas, globs o permisos de lectura." }],
+  },
+  {
+    name: "context.explain", description: "Explicar presupuesto, selección, inclusiones, omisiones y truncamientos del contexto.",
+    inputSchema: { type: "object", additionalProperties: false, required: [], properties: { sources: { type: "array", items: { type: "string" } }, automatic: { type: "boolean", default: false }, includeGitDiff: { type: "boolean", default: false }, provider: { type: "string", enum: ["qwen", "deepseek"] }, model: { type: "string" }, maxBytes: { type: "integer", minimum: 1024 }, output } },
+    behavior: { nonInteractive: true, streaming: false, idempotent: true, sideEffects: ["crea o reutiliza un paquete de caché"] }, errors: [],
+  },
+  {
+    name: "history.list", description: "Listar ejecuciones, modelos, commits, contexto y resultados del proyecto.",
+    inputSchema: { type: "object", additionalProperties: false, required: [], properties: { limit: { type: "integer", minimum: 1, maximum: 200, default: 20 }, output } },
+    behavior: { nonInteractive: true, streaming: false, idempotent: true, sideEffects: [] }, errors: [],
+  },
+  {
+    name: "diagnostics.contracts", description: "Verificar disponibilidad y contratos de modelos de los proveedores reales.",
+    inputSchema: { type: "object", additionalProperties: false, required: [], properties: { output } },
+    behavior: { nonInteractive: true, streaming: false, idempotent: true, sideEffects: ["navega páginas de proveedor"] }, errors: [],
   },
   {
     name: "project.current", description: "Obtener el proyecto detectado y sus preferencias.",
@@ -58,7 +73,7 @@ export function obtenerEsquemaComando(nombre: string): EsquemaComandoAgente | un
 export function obtenerManifestAgente() {
   return {
     protocol: "capi.agent.v1" as const,
-    version: "2.3.0",
+    version: "2.4.0",
     interfaces: ["cli", "mcp", "typescript-core"],
     outputFormats: ["human", "markdown", "json", "jsonl"],
     providers: [
@@ -69,7 +84,7 @@ export function obtenerManifestAgente() {
     exitCodes: { success: 0, generic: 1, timeout: 10, highDemand: 20, modelUnavailable: 21, browserSession: 30, providerPage: 40, webBridge: 50, providerUnavailable: 60 },
     skill: ".agents/skills/capi/SKILL.md",
     mcpCommand: "bun run src/mcp.ts",
-    contextFiles: { bundleByDefault: true, format: "txt", defaultMaxBytes: 4194304, cacheByContentHash: true, excludesSecretsAndBinaries: true },
+    contextFiles: { bundleByDefault: true, format: "txt", defaultMaxBytes: "resolved-by-provider-model", cacheByContentHash: true, incrementalSnapshots: true, automaticSelection: true, persistentSummaries: true, excludesSecretsAndBinaries: true },
     conventions: { stdout: "solo datos solicitados", stderr: "diagnóstico humano", jsonl: "un evento por línea", ansiInStructuredOutput: false, nonInteractiveByDefault: true },
   };
 }

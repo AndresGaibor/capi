@@ -15,6 +15,9 @@ import { comandoSesionImportar } from "./comandos/sesion/importar";
 import { comandoDiagnosticoPagina } from "./comandos/diagnostico/pagina";
 import { comandoDiagnosticoCompleto } from "./comandos/diagnostico/completo";
 import { comandoContextoEmpaquetar } from "./comandos/contexto/empaquetar";
+import { comandoContextoExplicar } from "./comandos/contexto/explicar";
+import { comandoHistorialListar } from "./comandos/historial/listar";
+import { comandoDiagnosticoContratos } from "./comandos/diagnostico/contratos";
 import { serveCommand } from "../../comandos/serve";
 import { comandoDiscover } from "./comandos/agente/discover";
 import { comandoSchema } from "./comandos/agente/schema";
@@ -27,14 +30,15 @@ const comandoChat = defineCommand({
 });
 
 export const comandoPrincipal = defineCommand({
-  meta: { name: "capi", version: "2.3.0", description: "CLI de chat con contexto aislado por proyecto" },
+  meta: { name: "capi", version: "2.4.0", description: "CLI de chat con contexto aislado por proyecto" },
   subCommands: {
     discover: comandoDiscover,
     schema: comandoSchema,
     doctor: comandoDoctor,
     mcp: comandoMcp,
     chat: comandoChat,
-    contexto: defineCommand({ meta: { name: "contexto" }, subCommands: { empaquetar: comandoContextoEmpaquetar } }),
+    contexto: defineCommand({ meta: { name: "contexto" }, subCommands: { empaquetar: comandoContextoEmpaquetar, explicar: comandoContextoExplicar } }),
+    historial: defineCommand({ meta: { name: "historial" }, subCommands: { listar: comandoHistorialListar } }),
     modelos: defineCommand({ meta: { name: "modelos" }, subCommands: { listar: comandoModelosListar } }),
     proyecto: defineCommand({ meta: { name: "proyecto" }, subCommands: { actual: comandoProyectoActual, vincular: comandoProyectoVincular, desvincular: comandoProyectoDesvincular, configurar: comandoProyectoConfigurar, preferencias: comandoProyectoPreferencias } }),
     conversaciones: defineCommand({
@@ -53,7 +57,7 @@ export const comandoPrincipal = defineCommand({
       },
     }),
     sesion: defineCommand({ meta: { name: "sesion" }, subCommands: { importar: comandoSesionImportar } }),
-    diagnostico: defineCommand({ meta: { name: "diagnostico" }, subCommands: { pagina: comandoDiagnosticoPagina, completo: comandoDiagnosticoCompleto } }),
+    diagnostico: defineCommand({ meta: { name: "diagnostico" }, subCommands: { pagina: comandoDiagnosticoPagina, completo: comandoDiagnosticoCompleto, contratos: comandoDiagnosticoContratos } }),
     servidor: defineCommand({ meta: { name: "servidor" }, subCommands: { iniciar: serveCommand } }),
   },
 });

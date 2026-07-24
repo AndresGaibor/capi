@@ -1,5 +1,6 @@
 import { RegistroProveedores } from "../../../nucleo/proveedores/RegistroProveedores";
 import { TransporteWebBridge } from "../../../plataforma/webbridge/TransporteWebBridge";
+import { GestorPestanas } from "../../../plataforma/webbridge/GestorPestanas";
 import { QwenPaginaChat } from "../../../proveedores/qwen/navegador/QwenPaginaChat";
 import { ProveedorQwen } from "../../../proveedores/qwen/ProveedorQwen";
 import { ProveedorDeepSeek } from "../../../proveedores/deepseek/ProveedorDeepSeek";
@@ -22,19 +23,23 @@ import { ImportarSesion } from "../../../modulos/sesiones/aplicacion/ImportarSes
 import { DiagnosticarPagina } from "../../../modulos/diagnostico/aplicacion/DiagnosticarPagina";
 import { DiagnosticarCompleto } from "../../../modulos/diagnostico/aplicacion/DiagnosticarCompleto";
 import { EmpaquetadorContexto } from "../../../modulos/contexto/aplicacion/EmpaquetadorContexto";
+import { ConsultarHistorialProyecto } from "../../../modulos/historial/aplicacion/ConsultarHistorialProyecto";
+import { VerificarContratosProveedor } from "../../../modulos/diagnostico/aplicacion/VerificarContratosProveedor";
 
 export function crearAplicacion() {
   const transporte = new TransporteWebBridge();
   const proveedores = new RegistroProveedores();
-  proveedores.registrar(new ProveedorQwen(new QwenPaginaChat(transporte)));
+  const gestorPestanas = new GestorPestanas(transporte);
+  proveedores.registrar(new ProveedorQwen(new QwenPaginaChat(transporte, gestorPestanas)));
   const sesionDeepSeek = new DeepSeekSesion(transporte, new SesionDeepSeekArchivo());
-  proveedores.registrar(new ProveedorDeepSeek(new DeepSeekPaginaChat(transporte), new DeepSeekConversaciones(new DeepSeekClienteConversaciones(transporte, sesionDeepSeek), new DeepSeekLectorHistorial(transporte)), sesionDeepSeek));
+  proveedores.registrar(new ProveedorDeepSeek(new DeepSeekPaginaChat(transporte, gestorPestanas), new DeepSeekConversaciones(new DeepSeekClienteConversaciones(transporte, sesionDeepSeek), new DeepSeekLectorHistorial(transporte)), sesionDeepSeek));
   const rutaDatos = process.env.CAPI_DATA_DIR ?? join(homedir(), ".local", "share", "capi");
   const repositorioContexto = new RepositorioContextoSqlite(join(rutaDatos, "contexto.sqlite"));
   const gestorContexto = new GestorContextoProyecto(repositorioContexto, () => detectarProyectoActual());
   const empaquetadorContexto = new EmpaquetadorContexto(join(rutaDatos, "contexto-cache"));
   return {
     proveedores,
+    gestorPestanas,
     repositorioContexto,
     gestorContexto,
     empaquetadorContexto,
@@ -45,5 +50,7 @@ export function crearAplicacion() {
     importarSesion: new ImportarSesion(proveedores),
     diagnosticarPagina: new DiagnosticarPagina(proveedores),
     diagnosticarCompleto: new DiagnosticarCompleto(proveedores, gestorContexto, repositorioContexto),
+    verificarContratosProveedor: new VerificarContratosProveedor(proveedores),
+    consultarHistorialProyecto: new ConsultarHistorialProyecto(repositorioContexto, gestorContexto),
   };
 }
