@@ -1,29 +1,48 @@
-export function scriptEstadoStreamingQwen(): string {
+export function scriptExtraerEstadoStreamingQwen(): string {
   return `
     (() => {
       const mainContent = document.querySelector('main.main-content');
       const messages = mainContent
-        ? mainContent.querySelectorAll('[class*="chat-message-item"], [class*="message-item"]')
+        ? mainContent.querySelectorAll(
+            '.qwen-chat-message, [class*="chat-message-item"], [class*="message-item"]'
+          )
         : [];
 
       const assistantMsgs = Array.from(messages).filter((m) =>
-        m.querySelector('[class*="assistant"], [class*="bot"]')
+        m.matches('.qwen-chat-message-assistant, [class*="assistant"], [class*="bot"]') ||
+        m.querySelector('.qwen-chat-message-assistant, [class*="assistant"], [class*="bot"]')
       );
       const lastAssistant = assistantMsgs[assistantMsgs.length - 1];
 
-      var contentEl = lastAssistant
-        ? lastAssistant.querySelector('[class*="content"], .response-message-content')
-        : null;
-      var responseText = contentEl
-        ? (contentEl.innerText || contentEl.textContent || '').trim()
-        : '';
+      var responseBoxes = lastAssistant
+        ? Array.from(lastAssistant.querySelectorAll('.response-message-box'))
+        : [];
+      var isDualResponse = responseBoxes.length > 1;
 
-      var thinkingEl = lastAssistant
-        ? lastAssistant.querySelector('.qwen-thinking-selector, [class*="thinking"], [class*="tool-status"]')
-        : null;
-      var thinkText = thinkingEl
-        ? (thinkingEl.innerText || thinkingEl.textContent || '').trim()
-        : '';
+      var contentCandidates = isDualResponse
+        ? responseBoxes.map((box) =>
+            box.querySelector('.response-message-content, .qwen-markdown, [class*="response-message-content"]')
+          )
+        : [lastAssistant
+            ? lastAssistant.querySelector('.response-message-content, .qwen-markdown, [class*="response-message-content"]')
+            : null];
+
+      var responseTexts = contentCandidates
+        .map((element) => element ? (element.innerText || element.textContent || '').trim() : '')
+        .filter((value) => value.length > 0);
+      var responseText = responseTexts[0] || '';
+
+      var thinkingCandidates = isDualResponse
+        ? responseBoxes.map((box) =>
+            box.querySelector('.qwen-thinking-status-card-title-text, [class*="thinking"], [class*="tool-status"]')
+          )
+        : [lastAssistant
+            ? lastAssistant.querySelector('.qwen-thinking-status-card-title-text, .qwen-thinking-selector, [class*="thinking"], [class*="tool-status"]')
+            : null];
+      var thinkTexts = thinkingCandidates
+        .map((element) => element ? (element.innerText || element.textContent || '').trim() : '')
+        .filter((value) => value.length > 0);
+      var thinkText = thinkTexts[0] || '';
 
       function isVisible(element) {
         if (!element) return false;
@@ -76,6 +95,8 @@ export function scriptEstadoStreamingQwen(): string {
         isAssistant: !!lastAssistant,
         isError: isError,
         errorMessage: isError ? 'Error en la respuesta de Qwen' : '',
+        isDualResponse: isDualResponse,
+        alternativeCount: responseBoxes.length,
       };
     })()
   `;

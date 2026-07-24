@@ -1,6 +1,6 @@
 {
   "name": "capi",
-  "module": "index.ts",
+  "module": "src/cli.ts",
   "type": "module",
   "private": true,
   "devDependencies": {
@@ -14,5 +14,13 @@
     "@clack/prompts": "^1.7.0",
     "citty": "^0.2.2",
     "consola": "^3.4.2"
+  },
+  "scripts": {
+    "capi": "bun run src/cli.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "check": "bun run typecheck && bun test",
+    "smoke:qwen": "bun run src/cli.ts chat enviar --proveedor qwen --modelo plus \"Responde solamente con la palabra OK\"",
+    "smoke:deepseek": "bun run src/cli.ts diagnostico pagina --proveedor deepseek"
   }
 }
