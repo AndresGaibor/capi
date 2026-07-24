@@ -60,3 +60,13 @@ test("empaqueta múltiples fuentes y entrega un solo txt al proveedor", async()=
   expect(peticiones[0].archivos).toEqual(["/cache/contexto.txt"]);
   expect(eventos.some(e=>e.tipo==="contexto" && e.archivosIncluidos===2)).toBeTrue();
 });
+
+
+test("cancela cooperativamente y libera leases al superar timeout", async()=>{
+  let liberada=false,ejecucionLiberada=false;
+  const proveedor:any={id:"deepseek",async *enviarMensaje(){await new Promise(r=>setTimeout(r,100));yield {tipo:"fin"}}};
+  const gestor:any={seleccionar:()=>({proyecto:{id:"p",nombre:"P",rutaRaiz:"/tmp"},seleccion:{conversacionId:"c",motivo:"reciente_ruta"}})};
+  const repo:any={adquirirEjecucion:()=>true,liberarEjecucion:()=>{ejecucionLiberada=true},renovarEjecucion:()=>true,adquirirOcupacion:()=>true,renovarOcupacion:()=>true,liberarOcupacion:()=>{liberada=true},listarConversacionesProyecto:()=>[],finalizarEjecucionHistorial:()=>{}};
+  const ejecutar=async()=>{for await(const _ of new EnviarMensajeConContexto({obtener:()=>proveedor} as any,gestor,repo).ejecutar("deepseek",{prompt:"x",timeoutMs:10})){} };
+  await expect(ejecutar()).rejects.toThrow("excedió 10 ms");expect(liberada).toBeTrue();expect(ejecucionLiberada).toBeTrue();
+});

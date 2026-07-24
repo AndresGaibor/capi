@@ -25,6 +25,7 @@ import { DiagnosticarCompleto } from "../../../modulos/diagnostico/aplicacion/Di
 import { EmpaquetadorContexto } from "../../../modulos/contexto/aplicacion/EmpaquetadorContexto";
 import { ConsultarHistorialProyecto } from "../../../modulos/historial/aplicacion/ConsultarHistorialProyecto";
 import { VerificarContratosProveedor } from "../../../modulos/diagnostico/aplicacion/VerificarContratosProveedor";
+import { GestionarEstadoProyecto } from "../../../modulos/mantenimiento/aplicacion/GestionarEstadoProyecto";
 
 export function crearAplicacion() {
   const transporte = new TransporteWebBridge();
@@ -52,5 +53,6 @@ export function crearAplicacion() {
     diagnosticarCompleto: new DiagnosticarCompleto(proveedores, gestorContexto, repositorioContexto),
     verificarContratosProveedor: new VerificarContratosProveedor(proveedores),
     consultarHistorialProyecto: new ConsultarHistorialProyecto(repositorioContexto, gestorContexto),
+    gestionarEstadoProyecto: new GestionarEstadoProyecto(repositorioContexto),
   };
 }

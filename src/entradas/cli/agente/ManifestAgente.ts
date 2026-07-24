@@ -14,7 +14,7 @@ const comandos: EsquemaComandoAgente[] = [
     inputSchema: { type: "object", additionalProperties: false, required: ["prompt"], properties: {
       prompt: { type: "string", minLength: 1 }, provider: { type: "string", enum: ["qwen", "deepseek"] }, model: { type: "string" }, conversationId: { type: "string" },
       newConversation: { type: "boolean", default: false }, reasoning: { type: "boolean" }, webSearch: { type: "boolean" }, files: { type: "array", items: { type: "string" }, description: "Archivos, directorios o globs. CAPI los combina en un único .txt seguro." }, includeGitDiff: { type: "boolean", default: false }, automaticContext: { type: "boolean", default: false }, incrementalContext: { type: "boolean", default: false }, includeConversationSummary: { type: "boolean", default: false }, maxContextBytes: { type: "integer", minimum: 1024 }, bundleContext: { type: "boolean", default: true, description: "Combinar las fuentes en un único archivo antes de enviarlas." },
-      fallback: { type: "boolean", default: true }, dryRun: { type: "boolean", default: false }, explain: { type: "boolean", default: false }, output,
+      fallback: { type: "boolean", default: true }, timeoutMs: { type: "integer", minimum: 1000 }, dryRun: { type: "boolean", default: false }, explain: { type: "boolean", default: false }, output,
     } },
     behavior: { nonInteractive: true, streaming: true, idempotent: false, sideEffects: ["navega una pestaña", "envía un mensaje", "actualiza historial local"] },
     errors: [
@@ -47,6 +47,26 @@ const comandos: EsquemaComandoAgente[] = [
     behavior: { nonInteractive: true, streaming: false, idempotent: true, sideEffects: ["navega páginas de proveedor"] }, errors: [],
   },
   {
+    name: "state.metrics", description: "Obtener métricas agregadas del proyecto por proveedor y modelo.",
+    inputSchema: { type: "object", additionalProperties: false, required: [], properties: { output } },
+    behavior: { nonInteractive: true, streaming: false, idempotent: true, sideEffects: [] }, errors: [],
+  },
+  {
+    name: "state.clean", description: "Limpiar selectivamente cache, snapshots, historial o resumenes.",
+    inputSchema: { type: "object", additionalProperties: false, required: ["layers","confirm"], properties: { layers:{type:"array",items:{type:"string"}},confirm:{type:"boolean"},output } },
+    behavior: { nonInteractive: true, streaming: false, idempotent: false, sideEffects: ["elimina estado local"] }, errors: [],
+  },
+  {
+    name: "state.export", description: "Exportar el estado portable del proyecto sin sesiones ni tokens.",
+    inputSchema: { type: "object", additionalProperties: false, required: ["file"], properties: { file:{type:"string"},output } },
+    behavior: { nonInteractive: true, streaming: false, idempotent: true, sideEffects: ["escribe un archivo JSON"] }, errors: [],
+  },
+  {
+    name: "state.import", description: "Importar y fusionar un export capi.project.v1.",
+    inputSchema: { type: "object", additionalProperties: false, required: ["file","confirm"], properties: { file:{type:"string"},confirm:{type:"boolean"},output } },
+    behavior: { nonInteractive: true, streaming: false, idempotent: true, sideEffects: ["fusiona estado local"] }, errors: [],
+  },
+  {
     name: "project.current", description: "Obtener el proyecto detectado y sus preferencias.",
     inputSchema: { type: "object", additionalProperties: false, required: [], properties: { output } },
     behavior: { nonInteractive: true, streaming: false, idempotent: true, sideEffects: ["registra o actualiza el proyecto en SQLite"] }, errors: [],
@@ -73,7 +93,7 @@ export function obtenerEsquemaComando(nombre: string): EsquemaComandoAgente | un
 export function obtenerManifestAgente() {
   return {
     protocol: "capi.agent.v1" as const,
-    version: "2.4.0",
+    version: "2.5.0",
     interfaces: ["cli", "mcp", "typescript-core"],
     outputFormats: ["human", "markdown", "json", "jsonl"],
     providers: [

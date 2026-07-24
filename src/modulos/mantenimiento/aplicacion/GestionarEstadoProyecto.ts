@@ -1,0 +1,2 @@
+import type { RepositorioContextoSqlite } from "../../../plataforma/persistencia/RepositorioContextoSqlite";
+export class GestionarEstadoProyecto { constructor(private readonly repo:RepositorioContextoSqlite){} limpiar(id:string,capas:string[]){return this.repo.limpiarProyecto(id,capas);} metricas(id:string){return this.repo.obtenerMetricasProyecto(id);} exportar(id:string){return this.repo.exportarProyecto(id);} importar(datos:unknown){return this.repo.importarProyecto(datos);} }

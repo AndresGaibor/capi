@@ -36,6 +36,10 @@ bun run src/cli.ts chat -f archivo.txt --no-empaquetar "Lee este archivo"
 bun run src/cli.ts contexto empaquetar --fuentes src,test --diff --output json
 bun run src/cli.ts contexto explicar --automatico -p qwen -m max --output json
 bun run src/cli.ts historial listar --limite 20 --output json
+bun run src/cli.ts estado metricas --output json
+bun run src/cli.ts estado exportar --archivo /tmp/capi-proyecto.json
+bun run src/cli.ts estado importar --archivo /tmp/capi-proyecto.json --confirmar
+bun run src/cli.ts estado limpiar --capas cache,snapshots --confirmar --output json
 bun run src/cli.ts diagnostico contratos --output json
 bun run src/cli.ts modelos listar -p qwen
 bun run src/cli.ts conversaciones listar -p deepseek
@@ -78,7 +82,9 @@ bun run src/cli.ts doctor --output json
 
 Formatos disponibles: `human`, `markdown`, `json` y `jsonl`. La salida estructurada usa `capi.agent.v1`, no contiene ANSI y conserva un `requestId` correlacionable. Los errores incluyen código, carácter reintentable y sugerencias ejecutables.
 
-El contexto acepta archivos, directorios, globs, JSON, listas por comas y manifiestos `@archivo`. `--contexto-auto` selecciona cambios Git, imports relativos, pruebas relacionadas y archivos base; `--incremental` omite archivos sin cambios ya enviados a la conversación; `--resumen` añade el resumen persistente. Por defecto CAPI excluye secretos y binarios, combina las fuentes en un único `.txt`, puede añadir `git diff`, aplica un límite de bytes y reutiliza el paquete por hash. `--no-empaquetar` conserva los archivos originales cuando el proveedor debe recibirlos por separado.
+El contexto acepta archivos, directorios, globs, JSON, listas por comas y manifiestos `@archivo`. `--contexto-auto` selecciona cambios Git, imports relativos, pruebas relacionadas y archivos base; `--incremental` omite archivos sin cambios ya enviados a la conversación; `--resumen` añade el resumen persistente. Por defecto CAPI excluye secretos y binarios, combina las fuentes en un único `.txt`, puede añadir `git diff`, aplica presupuestos de bytes y tokens por proveedor/modelo y reutiliza el paquete por hash. El ranking local prioriza coincidencias del prompt en nombre, ruta y contenido. Los adjuntos confirmados se registran por hash y conversación para sostener el modo incremental. `--no-empaquetar` conserva los archivos originales cuando el proveedor debe recibirlos por separado.
+
+Los resúmenes largos se compactan conservando decisiones, errores, resultados y archivos. Con `CAPI_LOCAL_ENCRYPTION_KEY` los resúmenes se cifran localmente con AES-256-GCM; los exports nunca incluyen sesiones ni tokens. `--timeout <ms>` cancela cooperativamente una ejecución y libera sus leases.
 
 La recuperación automática usa `Qwen preview → max → plus`. DeepSeek puede degradar `expert/vision → default`, pero siempre abre un chat nuevo al cambiar de modelo. Usa `--no-fallback` cuando el modelo exacto sea obligatorio.
 
@@ -92,7 +98,7 @@ bun run mcp
 bun run src/cli.ts mcp
 ```
 
-Expone `capi_discover`, `capi_schema`, `capi_project_current`, `capi_conversations_project`, `capi_doctor`, `capi_context_pack`, `capi_context_explain`, `capi_history_project`, `capi_diagnostics_contracts` y `capi_chat`. Un descriptor genérico está en `mcp/capi.example.json`.
+Expone `capi_discover`, `capi_schema`, `capi_project_current`, `capi_conversations_project`, `capi_doctor`, `capi_context_pack`, `capi_context_explain`, `capi_history_project`, `capi_diagnostics_contracts`, `capi_state_metrics`, `capi_state_clean`, `capi_state_export`, `capi_state_import` y `capi_chat`. Un descriptor genérico está en `mcp/capi.example.json`.
 
 Para agentes sin MCP, usa `AGENTS.md` y la skill portable `.agents/skills/capi/SKILL.md`. La guía completa está en `docs/agentes/integracion.md`.
 
@@ -109,6 +115,7 @@ bun run coverage
 bun run verify
 bun run smoke:qwen
 bun run smoke:deepseek
+bun run contracts:check
 bun run smoke:archivo:deepseek
 bun run smoke:archivo:qwen
 ```

@@ -11,7 +11,7 @@ import { explicarContexto } from "../../modulos/contexto/aplicacion/ExplicarCont
 function textoJson(data: unknown) { return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }], structuredContent: data as Record<string, unknown> }; }
 
 export function crearServidorMcp(): McpServer {
-  const server = new McpServer({ name: "capi", version: "2.4.0" });
+  const server = new McpServer({ name: "capi", version: "2.5.0" });
 
   server.registerTool("capi_discover", {
     description: "Descubre todas las capacidades de CAPI, modelos, fallbacks, formatos, errores y comandos. Úsala primero cuando no conozcas la interfaz.", inputSchema: {},
@@ -65,7 +65,7 @@ export function crearServidorMcp(): McpServer {
     const selected = [...new Set([...sources, ...auto.fuentes])];
     const budget = resolverPresupuestoContexto(provider, model, maxBytes);
     const diff = includeGitDiff ? obtenerDiffGit(project.rutaRaiz) : "";
-    const bundle = await app.empaquetadorContexto.empaquetar({ cwd: project.rutaRaiz, fuentes: selected, maxBytes: budget.maxBytes, motivos: auto.motivos, contenidoAdicional: diff ? [{ nombre: "git-diff.patch", contenido: diff }] : undefined });
+    const bundle = await app.empaquetadorContexto.empaquetar({ cwd: project.rutaRaiz, fuentes: selected, maxBytes: budget.maxBytes, caracteresPorToken: budget.caracteresPorToken, motivos: auto.motivos, contenidoAdicional: diff ? [{ nombre: "git-diff.patch", contenido: diff }] : undefined });
     return textoJson({ project, budget, automaticSelection: auto, explanation: explicarContexto(bundle) });
   });
 
@@ -78,13 +78,31 @@ export function crearServidorMcp(): McpServer {
     description: "Comprueba contratos reales de disponibilidad y modelos de Qwen y DeepSeek.", inputSchema: {},
   }, async () => textoJson(await crearAplicacion().verificarContratosProveedor.ejecutar()));
 
+
+  server.registerTool("capi_state_metrics", {
+    description: "Devuelve métricas agregadas del proyecto por proveedor y modelo.", inputSchema: {},
+  }, async () => { const app=crearAplicacion(); const project=app.gestorContexto.proyectoActual(); return textoJson({project,metrics:app.gestionarEstadoProyecto.metricas(project.id)}); });
+
+  server.registerTool("capi_state_clean", {
+    description: "Limpia selectivamente caché, snapshots, historial o resúmenes del proyecto. Requiere confirm=true.",
+    inputSchema: { layers:z.array(z.enum(["cache","snapshots","historial","resumenes"])).min(1), confirm:z.literal(true) },
+  }, async ({layers}) => { const app=crearAplicacion(); const project=app.gestorContexto.proyectoActual(); return textoJson({project,deleted:app.gestionarEstadoProyecto.limpiar(project.id,layers)}); });
+
+  server.registerTool("capi_state_export", {
+    description: "Devuelve un export JSON versionado del proyecto sin sesiones ni tokens.", inputSchema: {},
+  }, async () => { const app=crearAplicacion(); const project=app.gestorContexto.proyectoActual(); return textoJson(app.gestionarEstadoProyecto.exportar(project.id)); });
+
+  server.registerTool("capi_state_import", {
+    description: "Importa y fusiona un export capi.project.v1. Requiere confirm=true.", inputSchema: { data:z.record(z.string(),z.unknown()), confirm:z.literal(true) },
+  }, async ({data}) => textoJson(crearAplicacion().gestionarEstadoProyecto.importar(data)));
+
   server.registerTool("capi_chat", {
     description: "Envía un prompt al proveedor con contexto automático por proyecto. Reutiliza conversaciones libres, usa leases, reintenta alta demanda y degrada modelos. En DeepSeek cualquier degradación abre obligatoriamente un chat nuevo.",
     inputSchema: {
       prompt: z.string().min(1).describe("Instrucción completa y autosuficiente"),
       provider: z.enum(["qwen", "deepseek"]).optional(), model: z.string().optional(), conversationId: z.string().optional(),
       newConversation: z.boolean().optional().default(false), reasoning: z.boolean().optional(), webSearch: z.boolean().optional(),
-      files: z.array(z.string()).optional().describe("Archivos, directorios o globs; CAPI los empaqueta en un solo .txt"), automaticContext: z.boolean().optional().default(false), incrementalContext: z.boolean().optional().default(false), includeConversationSummary: z.boolean().optional().default(false), includeGitDiff: z.boolean().optional().default(false), maxContextBytes: z.number().int().min(1024).optional().default(4 * 1024 * 1024), fallback: z.boolean().optional().default(true), dryRun: z.boolean().optional().default(false),
+      files: z.array(z.string()).optional().describe("Archivos, directorios o globs; CAPI los empaqueta en un solo .txt"), automaticContext: z.boolean().optional().default(false), incrementalContext: z.boolean().optional().default(false), includeConversationSummary: z.boolean().optional().default(false), includeGitDiff: z.boolean().optional().default(false), maxContextBytes: z.number().int().min(1024).optional().default(4 * 1024 * 1024), fallback: z.boolean().optional().default(true), timeoutMs: z.number().int().min(1000).max(1800000).optional(), dryRun: z.boolean().optional().default(false),
     },
   }, async (input) => {
     const app = crearAplicacion(); const project = app.gestorContexto.proyectoActual(); const prefs = app.repositorioContexto.obtenerPreferencias(project.id);
@@ -93,7 +111,7 @@ export function crearServidorMcp(): McpServer {
     if (input.dryRun) return textoJson({ dryRun: true, project, provider, model: model ?? "default", selection: input.newConversation ? { motivo: "nueva" } : selection, fallback: input.fallback, context: { sources: input.files ?? [], automatic: input.automaticContext, incremental: input.incrementalContext, includeConversationSummary: input.includeConversationSummary, includeGitDiff: input.includeGitDiff, maxBytes: input.maxContextBytes, bundledAsSingleTextFile: true } });
     let response = "", reasoning = "", activeModel: string | undefined, conversationId: string | undefined; let context: Record<string, unknown> | undefined; const progress: string[] = [];
     try {
-      for await (const event of app.enviarMensaje.ejecutar(provider, { prompt: input.prompt, modelo: model, conversacionId: input.conversationId, forzarNueva: input.newConversation, permitirFallback: input.fallback, archivos: input.files, contexto: { incluirDiff: input.includeGitDiff, maxBytes: input.maxContextBytes, automatico: input.automaticContext, incremental: input.incrementalContext, incluirResumen: input.includeConversationSummary }, opciones: { razonamiento: input.reasoning ?? prefs?.razonamiento, busquedaWeb: input.webSearch ?? prefs?.busquedaWeb } })) {
+      for await (const event of app.enviarMensaje.ejecutar(provider, { prompt: input.prompt, modelo: model, conversacionId: input.conversationId, forzarNueva: input.newConversation, permitirFallback: input.fallback, timeoutMs: input.timeoutMs, archivos: input.files, contexto: { incluirDiff: input.includeGitDiff, maxBytes: input.maxContextBytes, automatico: input.automaticContext, incremental: input.incrementalContext, incluirResumen: input.includeConversationSummary }, opciones: { razonamiento: input.reasoning ?? prefs?.razonamiento, busquedaWeb: input.webSearch ?? prefs?.busquedaWeb } })) {
         if (event.tipo === "respuesta") response += event.contenido; else if (event.tipo === "pensamiento") reasoning += event.contenido; else if (event.tipo === "modelo") activeModel = event.nombre; else if (event.tipo === "conversacion") conversationId = event.id; else if (event.tipo === "contexto") context = { path: event.ruta, bytes: event.bytes, estimatedTokens: event.tokensEstimados, includedFiles: event.archivosIncluidos, omittedFiles: event.omitidos, truncatedFiles: event.truncados, fromCache: event.desdeCache }; else if (event.tipo === "inicio" && event.mensaje) progress.push(event.mensaje);
       }
       return textoJson({ response, reasoning: reasoning || undefined, provider, model: activeModel ?? model, conversationId, project: project.nombre, context, progress });

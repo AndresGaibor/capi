@@ -15,6 +15,7 @@ export interface PeticionChat {
   nuevaPestana?: boolean;
   forzarNueva?: boolean;
   permitirFallback?: boolean;
+  timeoutMs?: number;
   opciones?: {
     razonamiento?: boolean;
     busquedaWeb?: boolean;

@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, extname, join, relative, resolve } from "node:path";
+import { rankearContextoLocal } from "./RankearContextoLocal";
 
 const EXTENSIONES = [".ts", ".tsx", ".js", ".jsx", ".json", ".md"];
 
@@ -21,7 +22,7 @@ export interface SeleccionContextoAutomatico {
   motivos: Record<string, string[]>;
 }
 
-export function seleccionarContextoAutomatico(cwd: string): SeleccionContextoAutomatico {
+export function seleccionarContextoAutomatico(cwd: string, prompt = ""): SeleccionContextoAutomatico {
   const raiz = resolve(cwd);
   const cambiados = new Set([
     ...ejecutar(raiz, ["diff", "--name-only"]),
@@ -48,5 +49,6 @@ export function seleccionarContextoAutomatico(cwd: string): SeleccionContextoAut
     for (const candidato of [`${sinExt}.test.ts`, `${sinExt}.test.tsx`, `${sinExt}.spec.ts`, `${sinExt}.spec.tsx`]) agregar(candidato, `prueba relacionada con ${ruta}`);
   }
   for (const fijo of ["README.md", "AGENTS.md", "package.json", "tsconfig.json"]) agregar(fijo, "archivo de contexto base");
-  return { fuentes: Object.keys(motivos).sort(), motivos };
+  const ordenadas = prompt ? rankearContextoLocal(prompt, Object.keys(motivos), raiz).map(x => x.ruta) : Object.keys(motivos).sort();
+  return { fuentes: ordenadas, motivos };
 }

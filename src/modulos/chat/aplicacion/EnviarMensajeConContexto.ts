@@ -34,7 +34,7 @@ export class EnviarMensajeConContexto {
     let motivos: Record<string, string[]> | undefined;
 
     if (peticion.contexto?.automatico) {
-      const auto = seleccionarContextoAutomatico(cwd);
+      const auto = seleccionarContextoAutomatico(cwd, peticion.prompt);
       fuentes = [...new Set([...fuentes, ...auto.fuentes])];
       motivos = auto.motivos;
     }
@@ -63,7 +63,7 @@ export class EnviarMensajeConContexto {
 
     const debeEmpaquetar = this.empaquetador && peticion.contexto?.empaquetar !== false && (fuentes.length || extras.length);
     if (debeEmpaquetar) {
-      paquete = await this.empaquetador!.empaquetar({ cwd, fuentes, maxBytes: presupuesto.maxBytes, contenidoAdicional: extras, motivos });
+      paquete = await this.empaquetador!.empaquetar({ cwd, fuentes, maxBytes: presupuesto.maxBytes, caracteresPorToken: presupuesto.caracteresPorToken, contenidoAdicional: extras, motivos });
       peticionPreparada = { ...peticion, archivos: [paquete.ruta] };
       yield {
         tipo: "contexto", ruta: paquete.ruta, bytes: paquete.bytes, tokensEstimados: paquete.tokensEstimados,
@@ -124,7 +124,17 @@ export class EnviarMensajeConContexto {
             conversacionId: indice === 0 ? idSeleccionado : undefined,
             nuevaPestana: indice > 0 || (!idSeleccionado && candidatas.length > 0),
           });
-          for await (const evento of eventos) {
+          const iterador = eventos[Symbol.asyncIterator]();
+          const limite = peticion.timeoutMs ? Date.now() + peticion.timeoutMs : undefined;
+          while (true) {
+            const restante = limite ? limite - Date.now() : undefined;
+            if (restante != null && restante <= 0) { await iterador.return?.(undefined as never); throw new Error(`La operación excedió ${peticion.timeoutMs} ms`); }
+            const siguiente = restante == null ? await iterador.next() : await Promise.race([
+              iterador.next(),
+              new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`La operación excedió ${peticion.timeoutMs} ms`)), restante)),
+            ]);
+            if (siguiente.done) break;
+            const evento = siguiente.value;
             if (evento.tipo === "respuesta") { emitioRespuesta = true; respuesta += evento.contenido; }
             if (evento.tipo === "modelo") modeloFinal = evento.nombre;
             yield evento;
@@ -133,7 +143,10 @@ export class EnviarMensajeConContexto {
           conversacionFinal = indice === 0 && idSeleccionado ? idSeleccionado : await proveedor.obtenerConversacionActual?.() ?? undefined;
           if (conversacionFinal) {
             this.repositorio.registrarConversacion({ id: conversacionFinal, proveedor: proveedorId, proyectoLocalId: proyecto.id, modelo: intento.modelo });
-            if (paquete?.archivos?.length) this.repositorio.guardarSnapshotContexto?.(proyecto.id, proveedorId, conversacionFinal, paquete.archivos);
+            if (paquete?.archivos?.length) {
+              this.repositorio.guardarSnapshotContexto?.(proyecto.id, proveedorId, conversacionFinal, paquete.archivos);
+              this.repositorio.registrarAdjuntosConfirmados?.(proyecto.id, proveedorId, conversacionFinal, paquete.archivos);
+            }
             const resumenPrevio = this.repositorio.obtenerResumenConversacion?.(proyecto.id, proveedorId, conversacionFinal);
             const bloque = `## ${new Date().toISOString()}\n\n**Solicitud:** ${peticion.prompt.slice(0, 800)}\n\n**Resultado:** ${respuesta.slice(0, 2400)}\n\n**Archivos:** ${(paquete?.archivos?.map(a => a.ruta) ?? fuentes).join(", ") || "ninguno"}`;
             this.repositorio.guardarResumenConversacion?.(proyecto.id, proveedorId, conversacionFinal, `${resumenPrevio ? `${resumenPrevio}\n\n` : ""}${bloque}`.slice(-12000));

@@ -30,6 +30,8 @@
     "agent:discover": "bun run src/cli.ts discover --output json",
     "smoke:mcp": "bun run scripts/smoke-mcp.ts",
     "smoke:archivo:qwen": "bun run scripts/smoke-archivo.ts qwen",
-    "smoke:archivo:deepseek": "bun run scripts/smoke-archivo.ts deepseek"
+    "smoke:archivo:deepseek": "bun run scripts/smoke-archivo.ts deepseek",
+    "contracts:check": "bun run scripts/verificar-contratos.ts",
+    "state:metrics": "bun run src/cli.ts estado metricas --output json"
   }
 }

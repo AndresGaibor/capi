@@ -21,6 +21,7 @@ export interface SolicitudPaqueteContexto {
   maxBytes?: number;
   contenidoAdicional?: Array<{ nombre: string; contenido: string }>;
   motivos?: Record<string, string[]>;
+  caracteresPorToken?: number;
 }
 
 const DIRECTORIOS_IGNORADOS = new Set([".git", "node_modules", "dist", "build", "coverage", ".next", ".nuxt", ".turbo", ".cache", "target", "vendor"]);
@@ -136,6 +137,6 @@ export class EmpaquetadorContexto {
     const desdeCache = existsSync(ruta);
     if (!desdeCache) await Bun.write(ruta, salida);
     const bytes = Buffer.byteLength(salida);
-    return { ruta, hash, bytes, tokensEstimados: Math.ceil(salida.length / 4), archivosIncluidos: incluidos, archivos, omitidos, truncados, desdeCache };
+    return { ruta, hash, bytes, tokensEstimados: Math.ceil(salida.length / (solicitud.caracteresPorToken ?? 4)), archivosIncluidos: incluidos, archivos, omitidos, truncados, desdeCache };
   }
 }

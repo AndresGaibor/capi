@@ -1,0 +1,2 @@
+import { defineCommand } from "citty";import { crearAplicacion } from "../../composicion/crearAplicacion";
+export const comandoEstadoExportar=defineCommand({meta:{name:"exportar",description:"Exportar el estado portable del proyecto"},args:{archivo:{type:"string",required:true}},run:async({args})=>{const app=crearAplicacion(),p=app.gestorContexto.proyectoActual(),data=app.gestionarEstadoProyecto.exportar(p.id);await Bun.write(String(args.archivo),JSON.stringify(data,null,2));console.log(JSON.stringify({ok:true,archivo:String(args.archivo),formato:data.formato}));}});

@@ -25,6 +25,7 @@ export const argumentosChat = {
   requestId: { type: "string" as const, description: "Identificador correlacionable de la petición" },
   dryRun: { type: "boolean" as const, description: "Explicar la selección sin navegar ni enviar" },
   explain: { type: "boolean" as const, description: "Incluir decisiones de proyecto, conversación y recuperación" },
+  timeout: { type: "string" as const, description: "Cancelar cooperativamente el envío después de N milisegundos" },
 };
 
 const formatos = new Set(["human", "markdown", "json", "jsonl"]);
@@ -54,7 +55,7 @@ export async function ejecutarChat(args: Record<string, unknown>): Promise<void>
       conversacionId, prompt: String(args.prompt), modelo,
       archivos: interpretarFuentesContexto(args.archivo ? String(args.archivo) : undefined),
       contexto: { incluirDiff: Boolean(args.diff), maxBytes: args.limiteContexto ? Number(args.limiteContexto) : undefined, empaquetar: args.empaquetar !== false, automatico: Boolean(args.contextoAuto), incremental: Boolean(args.incremental), incluirResumen: Boolean(args.resumen) },
-      forzarNueva: Boolean(args.nueva), permitirFallback: Boolean(args.fallback),
+      forzarNueva: Boolean(args.nueva), permitirFallback: Boolean(args.fallback), timeoutMs: args.timeout ? Number(args.timeout) : undefined,
       opciones: { razonamiento: args.razonamiento === undefined ? preferencias?.razonamiento : Boolean(args.razonamiento), busquedaWeb: args.busqueda === undefined ? preferencias?.busquedaWeb : Boolean(args.busqueda) },
     });
     if (formato === "human") {

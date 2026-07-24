@@ -16,11 +16,14 @@ capi chat -f archivo.txt --no-empaquetar --output jsonl "Lee el archivo"
 capi chat --contexto-auto --incremental --resumen --output jsonl "Continúa el trabajo"
 capi contexto explicar --automatico -p qwen -m max --output json
 capi historial listar --output json
+capi estado metricas --output json
+capi estado exportar --archivo /tmp/capi-proyecto.json
+capi chat --timeout 120000 --output jsonl "Revisa el proyecto"
 ```
 
 Los sobres no streaming usan el protocolo `capi.agent.v1` con `ok`, `command`, `requestId`, `data`, `error` y `suggestions`. La salida estructurada nunca contiene ANSI.
 
-Las fuentes de contexto pueden ser archivos, directorios, globs, listas por comas, JSON o un manifiesto `@ruta`. El modo automático usa Git, imports relativos, pruebas relacionadas y archivos base. El modo incremental compara hashes por conversación y solo reenvía cambios. CAPI las empaqueta por defecto en un único `.txt`, excluye secretos y binarios, informa truncamientos y reutiliza la caché por contenido. Usa `--no-empaquetar` cuando el agente necesite conservar adjuntos separados.
+Las fuentes de contexto pueden ser archivos, directorios, globs, listas por comas, JSON o un manifiesto `@ruta`. El modo automático usa Git, imports relativos, pruebas relacionadas y archivos base. El modo incremental compara hashes por conversación y solo reenvía cambios. CAPI las rankea localmente respecto al prompt, las empaqueta por defecto en un único `.txt`, excluye secretos y binarios, informa truncamientos y reutiliza la caché por contenido. Los presupuestos incluyen bytes, tokens máximos y relación de caracteres por token. Usa `--no-empaquetar` cuando el agente necesite conservar adjuntos separados.
 
 ## MCP
 
@@ -54,6 +57,10 @@ Herramientas expuestas:
 - `capi_context_explain`
 - `capi_history_project`
 - `capi_diagnostics_contracts`
+- `capi_state_metrics`
+- `capi_state_clean`
+- `capi_state_export`
+- `capi_state_import`
 - `capi_chat`
 
 DeepSeek consulta su historial autenticado únicamente dentro de la pestaña cuando el DOM virtual todavía no monta la respuesta; CAPI no persiste ni muestra el token.
@@ -63,6 +70,10 @@ El MCP no duplica reglas: delega al mismo gestor de proyectos, conversaciones, p
 ## Compatibilidad
 
 La configuración exacta del cliente cambia entre Codex, Claude Code, OpenCode, Gemini CLI, Cursor, Zed y otras herramientas. En todos los casos usa transporte `stdio`, comando `bun` y el archivo `src/mcp.ts`. Cuando el cliente no soporte MCP, instala o referencia `.agents/skills/capi/SKILL.md` y usa la CLI.
+
+## Estado local y portabilidad
+
+`capi estado exportar` genera `capi.project.v1` sin cookies, tokens ni sesiones. La importación exige confirmación y fusiona de forma idempotente. `CAPI_LOCAL_ENCRYPTION_KEY` habilita AES-256-GCM para resúmenes persistentes. La limpieza selectiva también exige confirmación.
 
 ## Seguridad
 

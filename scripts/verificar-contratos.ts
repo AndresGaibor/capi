@@ -1,0 +1,2 @@
+import { ejecutarProcesoConTimeout } from "./lib/ejecutarProcesoConTimeout";
+const timeout=Number(process.env.CAPI_CONTRACT_TIMEOUT_MS??120000);const r=await ejecutarProcesoConTimeout(["bun","run","src/cli.ts","diagnostico","contratos","--output","json"],timeout);process.stdout.write(r.stdout);process.stderr.write(r.stderr);if(r.timeout||r.exitCode!==0)process.exit(1);const data=JSON.parse(r.stdout);if(!data.ok)process.exit(1);

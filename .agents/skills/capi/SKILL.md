@@ -55,3 +55,11 @@ capi chat -p qwen -m preview --output jsonl --request-id revision-42 \
 - `--resumen`: añade el resumen persistente de interacciones anteriores.
 - `capi contexto explicar`: audita presupuesto, inclusión, omisión, redacción y truncamiento.
 - `capi historial listar`: recupera modelo, conversación, rama, commit, contexto y estado de cada ejecución.
+
+## Operación local avanzada
+
+- Usa `capi estado metricas --output json` para elegir proveedor/modelo según éxito y duración.
+- Usa `capi estado exportar --archivo ...` antes de migrar una máquina o limpiar estado.
+- Nunca ejecutes `estado limpiar` o `estado importar` sin confirmación explícita.
+- Usa `--timeout` en tareas desatendidas.
+- `CAPI_LOCAL_ENCRYPTION_KEY` protege resúmenes locales; nunca incluyas esa clave en prompts o logs.
