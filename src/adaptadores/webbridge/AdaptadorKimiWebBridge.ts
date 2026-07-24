@@ -7,6 +7,7 @@ import type {
 import type { OpcionesChat } from "../../dominio/deepseek/casos-de-uso/EnviarMensajeStreaming";
 import type { MensajeExtraido } from "../../dominio/deepseek/casos-de-uso/ObtenerMensajes";
 import { DomScripts } from "./scripts/DomScripts";
+import { CAPI_CONFIG } from "../../configuracion/ConstantesCapi";
 
 const SESSION_NAME = "capi-capture";
 
@@ -28,6 +29,7 @@ export class AdaptadorKimiWebBridge implements PuertoInterfazWebBridge {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body,
+      signal: AbortSignal.timeout(CAPI_CONFIG.TIMEOUTS_MS.WEBBRIDGE_COMMAND),
     });
     const json = (await response.json()) as { ok: boolean; data: T };
     if (!json.ok) throw new Error(`WebBridge error: ${JSON.stringify(json)}`);

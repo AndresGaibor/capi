@@ -1,0 +1,82 @@
+export function scriptEstadoStreamingQwen(): string {
+  return `
+    (() => {
+      const mainContent = document.querySelector('main.main-content');
+      const messages = mainContent
+        ? mainContent.querySelectorAll('[class*="chat-message-item"], [class*="message-item"]')
+        : [];
+
+      const assistantMsgs = Array.from(messages).filter((m) =>
+        m.querySelector('[class*="assistant"], [class*="bot"]')
+      );
+      const lastAssistant = assistantMsgs[assistantMsgs.length - 1];
+
+      var contentEl = lastAssistant
+        ? lastAssistant.querySelector('[class*="content"], .response-message-content')
+        : null;
+      var responseText = contentEl
+        ? (contentEl.innerText || contentEl.textContent || '').trim()
+        : '';
+
+      var thinkingEl = lastAssistant
+        ? lastAssistant.querySelector('.qwen-thinking-selector, [class*="thinking"], [class*="tool-status"]')
+        : null;
+      var thinkText = thinkingEl
+        ? (thinkingEl.innerText || thinkingEl.textContent || '').trim()
+        : '';
+
+      function isVisible(element) {
+        if (!element) return false;
+        var target = element.closest('button, [role="button"]') || element;
+        var style = window.getComputedStyle(target);
+        var rect = target.getBoundingClientRect();
+        return (
+          style.display !== 'none' &&
+          style.visibility !== 'hidden' &&
+          Number(style.opacity || '1') > 0 &&
+          rect.width > 0 &&
+          rect.height > 0
+        );
+      }
+
+      var stopControl = document.querySelector([
+        'button[aria-label*="stop" i]',
+        'button[aria-label*="detener" i]',
+        'button[aria-label*="interrumpir" i]',
+        'button[title*="stop" i]',
+        'button[title*="detener" i]',
+        'button[class*="stop" i]',
+        '[role="button"][aria-label*="stop" i]',
+        'svg use[href*="stop" i]'
+      ].join(', '));
+      var isGenerating = isVisible(stopControl);
+
+      var actionToolbar = lastAssistant
+        ? lastAssistant.querySelector(
+            'svg use[href*="copy" i], svg use[href*="regenerate" i], svg use[href*="refresh" i], svg use[href*="thumb" i], svg use[href*="dianzan" i]'
+          )
+        : null;
+
+      var isError = !!(
+        lastAssistant &&
+        lastAssistant.querySelector('[class*="error"]')
+      );
+
+      var done = isError || (
+        responseText.length > 0 &&
+        !isGenerating &&
+        !!actionToolbar
+      );
+
+      return {
+        think: thinkText,
+        response: responseText,
+        done: done,
+        isGenerating: isGenerating,
+        isAssistant: !!lastAssistant,
+        isError: isError,
+        errorMessage: isError ? 'Error en la respuesta de Qwen' : '',
+      };
+    })()
+  `;
+}
