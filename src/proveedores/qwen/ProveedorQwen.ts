@@ -6,7 +6,7 @@ import { QwenPaginaChat } from "./navegador/QwenPaginaChat";
 
 export class ProveedorQwen implements ProveedorChat {
   readonly id = "qwen";
-  readonly capacidades: CapacidadesProveedor = { cambioModelo: true, listarModelos: true, conversaciones: false, mensajes: false, sesion: false, archivos: false, razonamiento: true, busquedaWeb: false };
+  readonly capacidades: CapacidadesProveedor = { cambioModelo: true, listarModelos: true, conversaciones: false, mensajes: false, sesion: false, archivos: true, razonamiento: true, busquedaWeb: false };
   constructor(private readonly pagina: QwenPaginaChat) {}
   verificarDisponibilidad(): Promise<void> { return this.pagina.verificarDisponibilidad(); }
   async listarModelos(): Promise<ModeloChat[]> {
@@ -24,6 +24,10 @@ export class ProveedorQwen implements ProveedorChat {
       yield { tipo: "inicio", mensaje: `Seleccionando modelo ${peticion.modelo}...` };
       const modelo = await this.seleccionarModelo(peticion.modelo);
       yield { tipo: "modelo", nombre: modelo.nombre };
+    }
+    if (peticion.archivos?.length) {
+      yield { tipo: "inicio", mensaje: `Adjuntando ${peticion.archivos.length} archivo(s)...` };
+      await this.pagina.adjuntar(peticion.archivos);
     }
     yield { tipo: "inicio", mensaje: "Enviando prompt..." };
     await this.pagina.enviarPrompt(peticion.prompt);

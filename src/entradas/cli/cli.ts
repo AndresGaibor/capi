@@ -14,6 +14,7 @@ import { comandoProyectoConfigurar, comandoProyectoPreferencias } from "./comand
 import { comandoSesionImportar } from "./comandos/sesion/importar";
 import { comandoDiagnosticoPagina } from "./comandos/diagnostico/pagina";
 import { comandoDiagnosticoCompleto } from "./comandos/diagnostico/completo";
+import { comandoContextoEmpaquetar } from "./comandos/contexto/empaquetar";
 import { serveCommand } from "../../comandos/serve";
 import { comandoDiscover } from "./comandos/agente/discover";
 import { comandoSchema } from "./comandos/agente/schema";
@@ -26,13 +27,14 @@ const comandoChat = defineCommand({
 });
 
 export const comandoPrincipal = defineCommand({
-  meta: { name: "capi", version: "2.2.0", description: "CLI de chat con contexto aislado por proyecto" },
+  meta: { name: "capi", version: "2.3.0", description: "CLI de chat con contexto aislado por proyecto" },
   subCommands: {
     discover: comandoDiscover,
     schema: comandoSchema,
     doctor: comandoDoctor,
     mcp: comandoMcp,
     chat: comandoChat,
+    contexto: defineCommand({ meta: { name: "contexto" }, subCommands: { empaquetar: comandoContextoEmpaquetar } }),
     modelos: defineCommand({ meta: { name: "modelos" }, subCommands: { listar: comandoModelosListar } }),
     proyecto: defineCommand({ meta: { name: "proyecto" }, subCommands: { actual: comandoProyectoActual, vincular: comandoProyectoVincular, desvincular: comandoProyectoDesvincular, configurar: comandoProyectoConfigurar, preferencias: comandoProyectoPreferencias } }),
     conversaciones: defineCommand({

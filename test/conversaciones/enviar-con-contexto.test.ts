@@ -47,3 +47,16 @@ test("DeepSeek degrada de expert a default en un chat nuevo", async()=>{
   expect(peticiones[0]).toMatchObject({modelo:"expert",conversacionId:"chat-expert"});
   expect(peticiones[1]).toMatchObject({modelo:"default",conversacionId:undefined,nuevaPestana:true});
 });
+
+test("empaqueta múltiples fuentes y entrega un solo txt al proveedor", async()=>{
+  const peticiones:any[]=[];
+  const proveedor:any={id:"qwen",async *enviarMensaje(p:any){peticiones.push(p);yield {tipo:"fin"}},obtenerConversacionActual:async()=>"nueva"};
+  const proveedores:any={obtener:()=>proveedor};
+  const gestor:any={seleccionar:()=>({proyecto:{id:"p",nombre:"P",rutaRaiz:"/proyecto"},seleccion:{motivo:"nueva"}})};
+  const repo:any={adquirirEjecucion:()=>true,liberarEjecucion:()=>{},renovarEjecucion:()=>true,adquirirOcupacion:()=>true,renovarOcupacion:()=>true,liberarOcupacion:()=>{},listarConversacionesProyecto:()=>[],registrarConversacion:()=>{}};
+  const empaquetador:any={empaquetar:async()=>({ruta:"/cache/contexto.txt",hash:"h",bytes:100,tokensEstimados:25,archivosIncluidos:2,omitidos:[],truncados:[],desdeCache:false})};
+  const eventos:any[]=[];
+  for await (const e of new EnviarMensajeConContexto(proveedores,gestor,repo,empaquetador).ejecutar("qwen",{prompt:"hola",archivos:["src","README.md"]})) eventos.push(e);
+  expect(peticiones[0].archivos).toEqual(["/cache/contexto.txt"]);
+  expect(eventos.some(e=>e.tipo==="contexto" && e.archivosIncluidos===2)).toBeTrue();
+});

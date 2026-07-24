@@ -11,9 +11,13 @@ capi discover --output json
 capi schema chat.send --output json
 capi chat --dry-run --output json "Revisa el proyecto"
 capi chat --output jsonl "Revisa el proyecto"
+capi chat -f src,test --diff --limite-contexto 4194304 --output jsonl "Revisa los cambios"
+capi chat -f archivo.txt --no-empaquetar --output jsonl "Lee el archivo"
 ```
 
 Los sobres no streaming usan el protocolo `capi.agent.v1` con `ok`, `command`, `requestId`, `data`, `error` y `suggestions`. La salida estructurada nunca contiene ANSI.
+
+Las fuentes de contexto pueden ser archivos, directorios, globs, listas por comas, JSON o un manifiesto `@ruta`. CAPI las empaqueta por defecto en un único `.txt`, excluye secretos y binarios, informa truncamientos y reutiliza la caché por contenido. Usa `--no-empaquetar` cuando el agente necesite conservar adjuntos separados.
 
 ## MCP
 

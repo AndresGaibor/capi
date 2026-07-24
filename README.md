@@ -30,6 +30,9 @@ bun run src/cli.ts chat "Hola"
 bun run src/cli.ts chat --nueva -p qwen -m preview "Hola"
 bun run src/cli.ts chat enviar -p qwen -m plus "Hola"
 bun run src/cli.ts chat enviar -p deepseek -m default "Hola"
+bun run src/cli.ts chat -f src,test --diff --limite-contexto 4194304 "Revisa los cambios"
+bun run src/cli.ts chat -f archivo.txt --no-empaquetar "Lee este archivo"
+bun run src/cli.ts contexto empaquetar --fuentes src,test --diff --output json
 bun run src/cli.ts modelos listar -p qwen
 bun run src/cli.ts conversaciones listar -p deepseek
 bun run src/cli.ts conversaciones mensajes -p deepseek <id>
@@ -71,6 +74,8 @@ bun run src/cli.ts doctor --output json
 
 Formatos disponibles: `human`, `markdown`, `json` y `jsonl`. La salida estructurada usa `capi.agent.v1`, no contiene ANSI y conserva un `requestId` correlacionable. Los errores incluyen código, carácter reintentable y sugerencias ejecutables.
 
+El contexto acepta archivos, directorios, globs, JSON, listas por comas y manifiestos `@archivo`. Por defecto CAPI excluye secretos y binarios, combina las fuentes en un único `.txt`, puede añadir `git diff`, aplica un límite de bytes y reutiliza el paquete por hash. `--no-empaquetar` conserva los archivos originales cuando el proveedor debe recibirlos por separado.
+
 La recuperación automática usa `Qwen preview → max → plus`. DeepSeek puede degradar `expert/vision → default`, pero siempre abre un chat nuevo al cambiar de modelo. Usa `--no-fallback` cuando el modelo exacto sea obligatorio.
 
 ## MCP y skills
@@ -102,7 +107,7 @@ bun run smoke:qwen
 bun run smoke:deepseek
 ```
 
-`bun run verify` ejecuta TypeScript, toda la suite y una puerta mínima de 80% de cobertura de líneas para las capas modulares. Los smokes requieren WebBridge y comprueban el recorrido real prompt → respuesta → fin.
+`bun run verify` ejecuta TypeScript, toda la suite y una puerta mínima de 80% de cobertura de líneas para las capas modulares. Los smokes requieren WebBridge y comprueban el recorrido real prompt → respuesta → fin. El smoke de Qwen termina cada intento después de 75 segundos para evitar bloqueos indefinidos; puede ajustarse con `CAPI_SMOKE_TIMEOUT_MS`.
 
 ## Pruebas
 

@@ -21,6 +21,7 @@ import { ObtenerMensajes } from "../../../modulos/conversaciones/aplicacion/Obte
 import { ImportarSesion } from "../../../modulos/sesiones/aplicacion/ImportarSesion";
 import { DiagnosticarPagina } from "../../../modulos/diagnostico/aplicacion/DiagnosticarPagina";
 import { DiagnosticarCompleto } from "../../../modulos/diagnostico/aplicacion/DiagnosticarCompleto";
+import { EmpaquetadorContexto } from "../../../modulos/contexto/aplicacion/EmpaquetadorContexto";
 
 export function crearAplicacion() {
   const transporte = new TransporteWebBridge();
@@ -31,11 +32,13 @@ export function crearAplicacion() {
   const rutaDatos = process.env.CAPI_DATA_DIR ?? join(homedir(), ".local", "share", "capi");
   const repositorioContexto = new RepositorioContextoSqlite(join(rutaDatos, "contexto.sqlite"));
   const gestorContexto = new GestorContextoProyecto(repositorioContexto, () => detectarProyectoActual());
+  const empaquetadorContexto = new EmpaquetadorContexto(join(rutaDatos, "contexto-cache"));
   return {
     proveedores,
     repositorioContexto,
     gestorContexto,
-    enviarMensaje: new EnviarMensajeConContexto(proveedores, gestorContexto, repositorioContexto),
+    empaquetadorContexto,
+    enviarMensaje: new EnviarMensajeConContexto(proveedores, gestorContexto, repositorioContexto, empaquetadorContexto),
     listarModelos: new ListarModelos(proveedores),
     listarConversaciones: new ListarConversaciones(proveedores),
     obtenerMensajes: new ObtenerMensajes(proveedores),

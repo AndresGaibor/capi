@@ -1,18 +1,23 @@
 import { TransporteWebBridge } from "../src/plataforma/webbridge/TransporteWebBridge";
+import { ejecutarProcesoConTimeout } from "./lib/ejecutarProcesoConTimeout";
 
 const maximoIntentos = 3;
+const timeoutIntentoMs = Number(process.env.CAPI_SMOKE_TIMEOUT_MS ?? 75_000);
 const transporte = new TransporteWebBridge();
 
 for (let intento = 1; intento <= maximoIntentos; intento++) {
   console.log(`\nSmoke Qwen: intento ${intento}/${maximoIntentos}`);
-  const proceso = Bun.spawnSync([
+  const proceso = await ejecutarProcesoConTimeout([
     "bun", "run", "src/cli.ts", "chat", "enviar",
     "--proveedor", "qwen", "--modelo", "preview", "--nueva",
     "Responde solamente con la palabra QWEN_OK",
-  ], { stdout: "pipe", stderr: "pipe" });
+  ], timeoutIntentoMs);
 
-  const salida = proceso.stdout.toString();
-  const error = proceso.stderr.toString();
+  const salida = proceso.stdout;
+  const error = proceso.stderr;
+  if (proceso.timeout) {
+    console.error(`El intento excedió ${timeoutIntentoMs} ms y fue terminado.`);
+  }
   process.stdout.write(salida);
   process.stderr.write(error);
 
@@ -33,7 +38,8 @@ for (let intento = 1; intento <= maximoIntentos; intento++) {
     && estado.value?.respuesta.includes("QWEN_OK");
   if (valido) process.exit(0);
 
-  const transitorio = /no produjo respuesta|awaiting-response|respuesta vacía|alta demanda|issue connecting/i.test(`${salida}\n${error}`)
+  const transitorio = proceso.timeout
+    || /no produjo respuesta|awaiting-response|respuesta vacía|alta demanda|issue connecting/i.test(`${salida}\n${error}`)
     || !estado.value?.respuesta.includes("QWEN_OK");
   if (!transitorio) process.exit(proceso.exitCode || 1);
 }

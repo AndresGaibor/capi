@@ -23,6 +23,7 @@ export class QwenPaginaChat {
   abrirConversacion(id?: string, nuevaPestana = false): Promise<void> { return this.navegacion.abrirConversacion(id, nuevaPestana); }
   listarModelos(): Promise<ModeloChat[]> { return this.modelos.listar(); }
   seleccionarModelo(modelo: string): Promise<ModeloChat> { return this.modelos.seleccionar(modelo); }
+  adjuntar(rutas: string[] = []): Promise<void> { return this.envio.adjuntar(rutas); }
   enviarPrompt(prompt: string): Promise<void> { return this.envio.enviar(prompt); }
   observarStreaming(): AsyncGenerator<EventoStreaming> { return this.streaming.observar(); }
   async obtenerConversacionActual(): Promise<string | null> { return this.navegacion.obtenerConversacionActual(); }

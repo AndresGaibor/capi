@@ -13,7 +13,7 @@ const comandos: EsquemaComandoAgente[] = [
     name: "chat.send", description: "Enviar un prompt con contexto automático del proyecto, recuperación de modelo y bloqueo de concurrencia.",
     inputSchema: { type: "object", additionalProperties: false, required: ["prompt"], properties: {
       prompt: { type: "string", minLength: 1 }, provider: { type: "string", enum: ["qwen", "deepseek"] }, model: { type: "string" }, conversationId: { type: "string" },
-      newConversation: { type: "boolean", default: false }, reasoning: { type: "boolean" }, webSearch: { type: "boolean" }, files: { type: "array", items: { type: "string" } },
+      newConversation: { type: "boolean", default: false }, reasoning: { type: "boolean" }, webSearch: { type: "boolean" }, files: { type: "array", items: { type: "string" }, description: "Archivos, directorios o globs. CAPI los combina en un único .txt seguro." }, includeGitDiff: { type: "boolean", default: false }, maxContextBytes: { type: "integer", minimum: 1024, default: 4194304 }, bundleContext: { type: "boolean", default: true, description: "Combinar las fuentes en un único archivo antes de enviarlas." },
       fallback: { type: "boolean", default: true }, dryRun: { type: "boolean", default: false }, explain: { type: "boolean", default: false }, output,
     } },
     behavior: { nonInteractive: true, streaming: true, idempotent: false, sideEffects: ["navega una pestaña", "envía un mensaje", "actualiza historial local"] },
@@ -22,6 +22,14 @@ const comandos: EsquemaComandoAgente[] = [
       { code: "TIMEOUT_PROVEEDOR", retryable: true, recovery: "Reintentar o usar el proveedor alternativo." },
       { code: "SESION_NAVEGADOR", retryable: true, recovery: "CAPI recrea la sesión WebBridge al navegar." },
     ],
+  },
+  {
+    name: "context.pack", description: "Combinar archivos, directorios, globs y git diff en un único .txt seguro, cacheado y limitado por tamaño.",
+    inputSchema: { type: "object", additionalProperties: false, required: ["sources"], properties: {
+      sources: { type: "array", items: { type: "string" } }, includeGitDiff: { type: "boolean", default: false }, maxBytes: { type: "integer", minimum: 1024, default: 4194304 }, output,
+    } },
+    behavior: { nonInteractive: true, streaming: false, idempotent: true, sideEffects: ["crea o reutiliza un archivo de caché local"] },
+    errors: [{ code: "CONTEXTO_INVALIDO", retryable: false, recovery: "Corrige rutas, globs o permisos de lectura." }],
   },
   {
     name: "project.current", description: "Obtener el proyecto detectado y sus preferencias.",
@@ -50,17 +58,18 @@ export function obtenerEsquemaComando(nombre: string): EsquemaComandoAgente | un
 export function obtenerManifestAgente() {
   return {
     protocol: "capi.agent.v1" as const,
-    version: "2.2.0",
+    version: "2.3.0",
     interfaces: ["cli", "mcp", "typescript-core"],
     outputFormats: ["human", "markdown", "json", "jsonl"],
     providers: [
-      { id: "qwen", models: ["preview", "max", "plus"], fallback: ["preview", "max", "plus"] },
-      { id: "deepseek", models: ["expert", "vision", "default"], fallback: ["expert", "default"], fallbackRequiresNewConversation: true },
+      { id: "qwen", models: ["preview", "max", "plus"], fallback: ["preview", "max", "plus"], files: true },
+      { id: "deepseek", models: ["expert", "vision", "default"], fallback: ["expert", "default"], fallbackRequiresNewConversation: true, files: true },
     ],
     commands: comandos,
     exitCodes: { success: 0, generic: 1, timeout: 10, highDemand: 20, modelUnavailable: 21, browserSession: 30, providerPage: 40, webBridge: 50, providerUnavailable: 60 },
     skill: ".agents/skills/capi/SKILL.md",
     mcpCommand: "bun run src/mcp.ts",
+    contextFiles: { bundleByDefault: true, format: "txt", defaultMaxBytes: 4194304, cacheByContentHash: true, excludesSecretsAndBinaries: true },
     conventions: { stdout: "solo datos solicitados", stderr: "diagnóstico humano", jsonl: "un evento por línea", ansiInStructuredOutput: false, nonInteractiveByDefault: true },
   };
 }

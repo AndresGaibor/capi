@@ -3,6 +3,12 @@ export interface PeticionChat {
   prompt: string;
   modelo?: string;
   archivos?: string[];
+  contexto?: {
+    empaquetar?: boolean;
+    incluirDiff?: boolean;
+    maxBytes?: number;
+    cwd?: string;
+  };
   nuevaPestana?: boolean;
   forzarNueva?: boolean;
   permitirFallback?: boolean;

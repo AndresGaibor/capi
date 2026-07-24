@@ -16,3 +16,12 @@ test("chat dry-run no usa navegador y explica la selección", () => {
   expect(body.command).toBe("chat.send.dry-run");
   expect(body.data.actions).toContain("adquirir lease");
 });
+
+test("contexto empaquetar devuelve un único archivo en JSON", () => {
+  const proceso = Bun.spawnSync(["bun", "run", "src/cli.ts", "contexto", "empaquetar", "README.md", "--limite", "20000", "--output", "json"], { cwd: process.cwd() });
+  expect(proceso.exitCode).toBe(0);
+  const salida = JSON.parse(proceso.stdout.toString());
+  expect(salida.protocol).toBe("capi.agent.v1");
+  expect(salida.data.ruta.endsWith(".txt")).toBeTrue();
+  expect(salida.data.archivosIncluidos).toBe(1);
+});

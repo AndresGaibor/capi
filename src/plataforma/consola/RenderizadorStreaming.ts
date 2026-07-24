@@ -15,6 +15,12 @@ export class RenderizadorStreaming {
       return;
     }
 
+    if (evento.tipo === "contexto") {
+      consola.info(`Contexto preparado: ${evento.archivosIncluidos} archivo(s), ${evento.bytes} bytes, ~${evento.tokensEstimados} tokens${evento.desdeCache ? " (cache)" : ""}`);
+      if (evento.omitidos || evento.truncados) consola.warn(`Contexto reducido: ${evento.omitidos} omitido(s), ${evento.truncados} truncado(s)`);
+      return;
+    }
+
     if (evento.tipo === "pensamiento") {
       if (!this.pensando) {
         process.stdout.write("\n\x1b[90m🤔 Pensando...\n");

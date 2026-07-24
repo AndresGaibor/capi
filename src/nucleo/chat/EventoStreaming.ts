@@ -4,4 +4,5 @@ export type EventoStreaming =
   | { tipo: "respuesta"; contenido: string }
   | { tipo: "conversacion"; id: string }
   | { tipo: "modelo"; nombre: string }
+  | { tipo: "contexto"; ruta: string; bytes: number; tokensEstimados: number; archivosIncluidos: number; omitidos: number; truncados: number; desdeCache: boolean }
   | { tipo: "fin" };
