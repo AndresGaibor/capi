@@ -5,13 +5,13 @@
   "private": true,
   "devDependencies": {
     "@types/bun": "latest",
-    "playwright": "^1.61.1"
+    "@types/jsdom": "^28.0.3",
+    "jsdom": "^29.1.1"
   },
   "peerDependencies": {
     "typescript": "^5"
   },
   "dependencies": {
-    "@clack/prompts": "^1.7.0",
     "citty": "^0.2.2",
     "consola": "^3.4.2"
   },
@@ -20,7 +20,9 @@
     "typecheck": "tsc --noEmit",
     "test": "bun test",
     "check": "bun run typecheck && bun test",
-    "smoke:qwen": "bun run src/cli.ts chat enviar --proveedor qwen --modelo plus \"Responde solamente con la palabra OK\"",
-    "smoke:deepseek": "bun run src/cli.ts diagnostico pagina --proveedor deepseek"
+    "smoke:qwen": "bun run scripts/smoke-qwen.ts",
+    "smoke:deepseek": "bun run src/cli.ts chat enviar --proveedor deepseek --modelo default \"Responde solamente con la palabra OK\"",
+    "coverage": "rm -rf coverage && bun test --coverage --coverage-reporter=lcov && bun run scripts/verificar-cobertura.ts",
+    "verify": "bun run typecheck && bun test && bun run coverage"
   }
 }

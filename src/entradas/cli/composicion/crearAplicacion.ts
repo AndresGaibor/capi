@@ -3,6 +3,10 @@ import { TransporteWebBridge } from "../../../plataforma/webbridge/TransporteWeb
 import { QwenPaginaChat } from "../../../proveedores/qwen/navegador/QwenPaginaChat";
 import { ProveedorQwen } from "../../../proveedores/qwen/ProveedorQwen";
 import { ProveedorDeepSeek } from "../../../proveedores/deepseek/ProveedorDeepSeek";
+import { DeepSeekPaginaChat } from "../../../proveedores/deepseek/navegador/DeepSeekPaginaChat";
+import { DeepSeekSesion } from "../../../proveedores/deepseek/servicios/DeepSeekSesion";
+import { DeepSeekConversaciones } from "../../../proveedores/deepseek/servicios/DeepSeekConversaciones";
+import { SesionDeepSeekArchivo } from "../../../plataforma/persistencia/SesionDeepSeekArchivo";
 import { EnviarMensajeStreaming } from "../../../modulos/chat/aplicacion/EnviarMensajeStreaming";
 import { ListarModelos } from "../../../modulos/modelos/aplicacion/ListarModelos";
 import { ListarConversaciones } from "../../../modulos/conversaciones/aplicacion/ListarConversaciones";
@@ -14,7 +18,8 @@ export function crearAplicacion() {
   const transporte = new TransporteWebBridge();
   const proveedores = new RegistroProveedores();
   proveedores.registrar(new ProveedorQwen(new QwenPaginaChat(transporte)));
-  proveedores.registrar(new ProveedorDeepSeek());
+  const sesionDeepSeek = new DeepSeekSesion(transporte, new SesionDeepSeekArchivo());
+  proveedores.registrar(new ProveedorDeepSeek(new DeepSeekPaginaChat(transporte), new DeepSeekConversaciones(transporte, sesionDeepSeek), sesionDeepSeek));
   return {
     proveedores,
     enviarMensaje: new EnviarMensajeStreaming(proveedores),

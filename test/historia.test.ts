@@ -1,5 +1,5 @@
 import { test, expect } from "bun:test";
-import { convertirRegistroHistoria } from "../src/dominio/deepseek/servicios/ConvertirRegistroHistoria";
+import { convertirRegistroHistoria } from "../src/proveedores/deepseek/servicios/ConvertirRegistroHistoria";
 
 test("convertirRegistroHistoria convierte objeto IndexedDB a entidad Conversacion", () => {
   const mockRecord = {

@@ -4,7 +4,7 @@ import type { TransporteNavegador } from "../../../plataforma/webbridge/Transpor
 const dormir = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export class QwenNavegacion {
-  constructor(private readonly transporte: TransporteNavegador) {}
+  constructor(private readonly transporte: TransporteNavegador, private readonly pausa: (ms:number)=>Promise<unknown> = dormir) {}
 
   async verificarDisponibilidad(): Promise<void> {
     if (!(await this.transporte.estaDisponible())) {
@@ -17,22 +17,35 @@ export class QwenNavegacion {
     let yaAbierta = false;
     try {
       const actual = await this.transporte.evaluar<string>("window.location.href");
-      yaAbierta = Boolean(actual.value?.includes(id ?? "chat.qwen.ai"));
+      if (id) {
+        yaAbierta = Boolean(actual.value?.includes(`/c/${id}`));
+      } else {
+        try {
+          const actualUrl = new URL(actual.value ?? "");
+          yaAbierta = actualUrl.hostname === "chat.qwen.ai" && actualUrl.pathname === "/";
+        } catch {
+          yaAbierta = false;
+        }
+      }
     } catch {
       yaAbierta = false;
     }
 
     if (!yaAbierta) {
       await this.transporte.navegar(url, false, "CAPI Qwen");
-      await dormir(5000);
+      await this.pausa(5000);
     }
 
     for (let i = 0; i < 15; i++) {
       const lista = await this.transporte.evaluar<boolean>(
         "!!document.querySelector('textarea.message-input-textarea')",
       );
-      if (lista.value) return;
-      await dormir(1000);
+      if (lista.value) {
+        const host = await this.transporte.evaluar<string>("location.host");
+        if (host.value !== "chat.qwen.ai") throw new ErrorPaginaProveedor(`Se esperaba Qwen, pero la pestaña activa es ${host.value ?? "desconocida"}`);
+        return;
+      }
+      await this.pausa(1000);
     }
 
     throw new ErrorPaginaProveedor("El textarea de Qwen no apareció");

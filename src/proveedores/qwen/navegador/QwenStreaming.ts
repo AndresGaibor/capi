@@ -18,18 +18,18 @@ interface EstadoQwen {
 }
 
 export class QwenStreaming {
-  constructor(private readonly transporte: TransporteNavegador) {}
+  constructor(private readonly transporte: TransporteNavegador, private readonly pausa: (ms:number)=>Promise<unknown> = dormir, private readonly ahora: ()=>number = Date.now) {}
 
   async *observar(): AsyncGenerator<EventoStreaming> {
     let ultimoPensamiento = "", ultimaRespuesta = "", observada = "";
-    let ultimoCambio = Date.now(), vaciaDesde: number | null = null;
-    const inicio = Date.now();
+    let ultimoCambio = this.ahora(), vaciaDesde: number | null = null;
+    const inicio = this.ahora();
     let respondiendo = false;
 
     while (true) {
-      await dormir(CAPI_CONFIG.TIMEOUTS_MS.INTERVALO_STREAMING);
+      await this.pausa(CAPI_CONFIG.TIMEOUTS_MS.INTERVALO_STREAMING);
       const resultado = await this.transporte.evaluar<EstadoQwen>(scriptExtraerEstadoStreamingQwen());
-      const ahora = Date.now();
+      const ahora = this.ahora();
       if (!resultado.value) {
         if (ahora - inicio >= CAPI_CONFIG.TIMEOUTS_MS.STREAMING_CHUNK_TIMEOUT) throw new ErrorTimeoutProveedor("No se encontró el área de respuesta de Qwen");
         continue;

@@ -1,2 +1,3 @@
 #!/usr/bin/env bun
-import "./entradas/cli/cli";
+import { ejecutarCli } from "./entradas/cli/cli";
+ejecutarCli();

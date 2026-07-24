@@ -1,0 +1,14 @@
+import type { EventoStreaming } from "../../../nucleo/chat/EventoStreaming";
+import type { ModeloChat } from "../../../nucleo/proveedores/ProveedorChat";
+import type { TransporteNavegador } from "../../../plataforma/webbridge/TransporteNavegador";
+import type { OpcionesDeepSeek } from "../tipos";
+import { DeepSeekNavegacion } from "./DeepSeekNavegacion";
+import { DeepSeekModelos } from "./DeepSeekModelos";
+import { DeepSeekEnvio } from "./DeepSeekEnvio";
+import { DeepSeekStreaming } from "./DeepSeekStreaming";
+export class DeepSeekPaginaChat {
+  private readonly nav:DeepSeekNavegacion; private readonly modelos:DeepSeekModelos; private readonly envio:DeepSeekEnvio; private readonly stream:DeepSeekStreaming;
+  constructor(transporte:TransporteNavegador){this.nav=new DeepSeekNavegacion(transporte);this.modelos=new DeepSeekModelos(transporte);this.envio=new DeepSeekEnvio(transporte);this.stream=new DeepSeekStreaming(transporte);}
+  verificar(){return this.nav.verificar();} abrir(id?:string){return this.nav.abrir(id);} listarModelos(){return this.modelos.listar();} seleccionarModelo(m:string):Promise<ModeloChat>{return this.modelos.seleccionar(m);} modeloActual(){return this.modelos.actual();}
+  async preparar(op:OpcionesDeepSeek,esNuevo:boolean){await this.envio.configurar(op,esNuevo);await this.envio.adjuntar(op.archivos);} enviar(p:string){return this.envio.enviar(p);} observar():AsyncGenerator<EventoStreaming>{return this.stream.observar();}
+}

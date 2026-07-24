@@ -24,7 +24,8 @@ export class RenderizadorStreaming {
       return;
     }
 
-    if (evento.tipo === "respuesta") {      if (this.pensando) {
+    if (evento.tipo === "respuesta") {
+      if (this.pensando) {
         process.stdout.write("\n\n\x1b[32m💡 Respuesta:\x1b[0m\n");
         this.pensando = false;
       }

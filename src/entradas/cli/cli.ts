@@ -8,7 +8,7 @@ import { comandoSesionImportar } from "./comandos/sesion/importar";
 import { comandoDiagnosticoPagina } from "./comandos/diagnostico/pagina";
 import { serveCommand } from "../../comandos/serve";
 
-const principal = defineCommand({
+export const comandoPrincipal = defineCommand({
   meta: { name: "capi", version: "2.0.0", description: "CLI modular para proveedores de chat" },
   subCommands: {
     chat: defineCommand({ meta: { name: "chat" }, subCommands: { enviar: comandoChatEnviar } }),
@@ -19,4 +19,4 @@ const principal = defineCommand({
     servidor: defineCommand({ meta: { name: "servidor" }, subCommands: { iniciar: serveCommand } }),
   },
 });
-runMain(principal);
+export function ejecutarCli(): void { runMain(comandoPrincipal); }

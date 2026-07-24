@@ -1,0 +1,15 @@
+import { describe, expect, test } from "bun:test";
+import { RegistroProveedores } from "../../src/nucleo/proveedores/RegistroProveedores";
+import { EnviarMensajeStreaming } from "../../src/modulos/chat/aplicacion/EnviarMensajeStreaming";
+import { ListarConversaciones } from "../../src/modulos/conversaciones/aplicacion/ListarConversaciones";
+import { ObtenerMensajes } from "../../src/modulos/conversaciones/aplicacion/ObtenerMensajes";
+import { DiagnosticarPagina } from "../../src/modulos/diagnostico/aplicacion/DiagnosticarPagina";
+import { ImportarSesion } from "../../src/modulos/sesiones/aplicacion/ImportarSesion";
+const p:any={id:'x',capacidades:{cambioModelo:true,listarModelos:true,conversaciones:true,mensajes:true,sesion:true,archivos:false,razonamiento:false,busquedaWeb:false},verificarDisponibilidad:async()=>{},async *enviarMensaje(){yield{tipo:'fin'}},listarConversaciones:async()=>[{id:'1',titulo:'t',actualizadaEn:1}],obtenerMensajes:async()=>({id:'1',titulo:'t',mensajes:[]}),importarSesion:async()=>{},diagnosticarPagina:async()=>({ok:true})};
+describe('todos casos',()=>{const r=new RegistroProveedores();r.registrar(p);
+ test('chat',async()=>{const a=[];for await(const e of new EnviarMensajeStreaming(r).ejecutar('x',{prompt:'h'}))a.push(e);expect(a).toHaveLength(1)});
+ test('conversaciones',async()=>expect(await new ListarConversaciones(r).ejecutar('x')).toHaveLength(1));
+ test('mensajes',async()=>expect((await new ObtenerMensajes(r).ejecutar('x','1'))?.id).toBe('1'));
+ test('diagnóstico',async()=>expect(await new DiagnosticarPagina(r).ejecutar('x')).toEqual({ok:true}));
+ test('sesión',async()=>expect(new ImportarSesion(r).ejecutar('x')).resolves.toBeUndefined());
+});

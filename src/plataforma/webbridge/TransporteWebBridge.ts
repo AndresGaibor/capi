@@ -1,11 +1,10 @@
-import { AdaptadorKimiWebBridge } from "../../adaptadores/webbridge/AdaptadorKimiWebBridge";
 import type { TransporteNavegador } from "./TransporteNavegador";
-
+import { ClienteWebBridge } from "./ClienteWebBridge";
 export class TransporteWebBridge implements TransporteNavegador {
-  constructor(private readonly adaptador = new AdaptadorKimiWebBridge()) {}
-  estaDisponible(): Promise<boolean> { return this.adaptador.estaDisponible(); }
-  async navegar(url: string, nuevaPestana = false, titulo?: string): Promise<void> {
-    await this.adaptador.navegar(url, nuevaPestana, titulo);
-  }
-  evaluar<T>(codigo: string) { return this.adaptador.evaluar<T>(codigo); }
+  constructor(private readonly cliente = new ClienteWebBridge()) {}
+  estaDisponible() { return this.cliente.estaDisponible(); }
+  async navegar(url: string, nuevaPestana = false, tituloGrupo?: string): Promise<void> { await this.cliente.navegar(url, nuevaPestana, tituloGrupo); }
+  evaluar<T>(codigo: string) { return this.cliente.evaluar<T>(codigo); }
+  cdp<T>(method: string, params?: Record<string, unknown>) { return this.cliente.cdp<T>(method, params); }
+  cerrarSesion() { return this.cliente.cerrarSesion(); }
 }

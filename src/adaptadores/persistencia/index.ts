@@ -1,1 +1,0 @@
-export { AdaptadorSesionArchivo } from "./AdaptadorSesionArchivo";

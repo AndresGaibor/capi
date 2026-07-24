@@ -1,5 +1,5 @@
 import { test, expect } from "bun:test";
-import { normalizarRespuesta, truncarTexto } from "../src/dominio/deepseek/servicios/NormalizarRespuestaDeepSeek";
+import { normalizarRespuesta, truncarTexto } from "../src/proveedores/deepseek/servicios/NormalizarRespuestaDeepSeek";
 
 test("normalizarRespuesta elimina comentarios del sistema", () => {
   const input = "We need to parse the user's input. I'll respond in Spanish with a warm greeting and offer assistance.¡Hola! ¿En qué puedo ayudarte?";
