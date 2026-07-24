@@ -1,91 +1,42 @@
-# AGENTS.md — Guía para Agentes de IA en `capi`
+# CAPI — instrucciones para agentes
 
-Este documento proporciona el contexto técnico, la arquitectura, el estado del proyecto y las instrucciones operativas para agentes de IA que trabajen en la base de código `capi`.
+CAPI permite consultar Qwen y DeepSeek desde agentes de código sin controlar manualmente el navegador.
 
----
+## Inicio rápido
 
-## 📌 Información General
+1. Ejecuta `bun run src/cli.ts discover --output json` para descubrir capacidades.
+2. Consulta `bun run src/cli.ts schema chat.send --output json` antes de construir una llamada nueva.
+3. Usa `--output jsonl` para chat con streaming y `--output json` para operaciones no streaming.
+4. Usa `--dry-run` antes de una operación cuando necesites comprobar proveedor, modelo y conversación sin efectos.
+5. No analices texto ANSI cuando exista salida JSON/JSONL.
 
-- **Proyecto**: `capi` (CLI en TypeScript + Bun para interactuar con DeepSeek Chat)
-- **Ubicación**: `/Users/andresgaibor/code/javascript/capi`
-- **Runtime**: Bun (`bun` en lugar de `node`, `bun test` para pruebas, `bunx tsc` para comprobación de tipos)
-- **Bridge Backend**: `Bun.serve()` en puerto `3847`
-- **WebBridge Extension/Daemon**: Escucha en `http://127.0.0.1:10086` (sesión CDP `capi-capture`)
-
----
-
-## 🏛️ Arquitectura (Clean Architecture)
-
-```
-src/
-├── dominio/deepseek/
-│   ├── casos-de-uso/
-│   │   ├── EnviarMensajeStreaming.ts   # Generador asíncrono para streaming en vivo
-│   │   ├── EnviarMensaje.ts            # Envió con polling de respaldo
-│   │   ├── ObtenerMensajes.ts          # Extracción desde IndexedDB o DOM
-│   │   ├── ListarConversaciones.ts     # Paginación y listado via API
-│   │   └── IniciarSesionDeepSeek.ts    # Captura de credenciales
-│   ├── entidades/
-│   │   ├── Conversacion.ts
-│   │   ├── Mensaje.ts
-│   │   └── SesionDeepSeek.ts
-│   ├── puertos/
-│   │   ├── PuertoInterfazWebBridge.ts
-│   │   ├── PuertoApiDeepSeek.ts
-│   │   ├── PuertoRepositorioIndexedDB.ts
-│   │   ├── PuertoRepositorioSesion.ts
-│   │   └── PuertoSalidaCLI.ts
-│   └── servicios/
-│       ├── NormalizarRespuestaDeepSeek.ts
-│       └── ConvertirRegistroHistoria.ts
-├── adaptadores/
-│   ├── webbridge/AdaptadorKimiWebBridge.ts  # Cliente REST para daemon Kimi (CDP)
-│   ├── api/AdaptadorApiDeepSeek.ts          # Llamadas HTTP directas a DeepSeek
-│   ├── indexeddb/AdaptadorIndexedDB.ts      # Lectura de IndexedDB local via evaluate()
-│   ├── persistencia/AdaptadorSesionArchivo.ts # Lectura/escritura en ~/.cache/capi/
-│   └── cli/AdaptadorConsola.ts
-├── aplicacion/deepseek/
-│   └── ServicioChatDeepSeek.ts              # Orquestador de la capa de aplicación
-├── auth/
-│   └── deepseek.ts                         # Lógica de carga/guardado de tokens y cookies
-└── comandos/
-    ├── chat.ts                             # Comandos `capi chat (list|messages|send)`
-    ├── capture.ts                          # Comando `capi capture`
-    ├── serve.ts                            # Comando `capi serve`
-    └── auth.ts                             # Comando `capi auth (status|deepseek)`
-```
-
----
-
-## 🚦 Verificación y Pruebas
-
-Para garantizar la calidad de los cambios, **siempre** ejecuta:
+## Uso recomendado
 
 ```bash
-# 1. Comprobación de tipos de TypeScript
-bunx tsc --noEmit
-
-# 2. Ejecución de suite de tests automatizada
-bun test
-
-# 3. Comprobación del estado de sesión
-bun run src/cli.ts auth status
+bun run src/cli.ts chat --output jsonl "Analiza este cambio"
+bun run src/cli.ts chat -p qwen -m preview --output jsonl "Investiga este problema"
+bun run src/cli.ts proyecto actual --output json
+bun run src/cli.ts conversaciones proyecto --output json
+bun run src/cli.ts doctor --output json
 ```
 
----
+CAPI detecta la raíz Git, reutiliza contexto libre, limita concurrencia, registra conversaciones y recupera fallos transitorios. En DeepSeek, degradar de `expert` o `vision` a `default` siempre crea un chat nuevo.
 
-## 🔑 Credenciales y Autenticación
+## Reglas operativas
 
-DeepSeek utiliza 4 credenciales esenciales almacenadas en `~/.cache/capi/deepseek-session.json`:
-1. `authorization`: Token Bearer obtenido de `localStorage.getItem('userToken')`.
-2. `thumbcache`: Cookie `.thumbcache_*`.
-3. `awsWafToken`: Cookie `aws-waf-token`.
-4. `dsSessionId`: Cookie **HttpOnly** `ds_session_id` (se captura automáticamente via CDP en `capi capture`).
+- No abras ni manipules directamente Qwen/DeepSeek si CAPI puede realizar la acción.
+- No inventes flags: usa `discover` y `schema`.
+- Conserva `requestId` para correlacionar eventos y errores.
+- Ante un error con `retryable: true`, sigue `suggestions` o deja actuar al fallback automático.
+- Usa `--fallback=false` solo cuando el modelo exacto sea un requisito estricto.
+- No incluyas secretos, cookies o tokens en prompts ni logs.
 
----
+## Validación del repositorio
 
-## 📝 Reglas de Desarrollo para Agentes
+```bash
+bun run verify
+bun run smoke:qwen
+bun run smoke:deepseek
+```
 
-1. **Rutas Relativas / Portabilidad**: No utilices rutas absolutas con nombres de usuario específicos (usar `process.execPath` o `process.env.HOME`).
-2. **Streaming en Tiempo Real**: Al consultar elementos del DOM durante el streaming activo de DeepSeek, contempla tanto los selectores oficiales (`.ds-think-content`, `.ds-assistant-message-main-content`) como los fallbacks de generación en vivo (`.ds-markdown`, `[class*="think"]`, `[class*="stop"]`).
-3. **Manejo de Errores**: No silencies errores ni utilices bloques `try/catch` vacíos sin diagnóstico. En los comandos CLI, utiliza los primitivos de `consola` y `@clack/prompts`.
+La skill portable está en `.agents/skills/capi/SKILL.md`. La integración MCP se inicia con `bun run mcp`.

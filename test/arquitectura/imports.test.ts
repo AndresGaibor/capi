@@ -6,3 +6,11 @@ test("núcleo no depende de capas externas",()=>{for(const f of archivos("src/nu
 test("módulos no contienen DOM ni fetch",()=>{for(const f of archivos("src/modulos")){const s=readFileSync(f,"utf8");expect(s).not.toMatch(/querySelector|document\.|fetch\(/)}});
 test("proveedores no importan DI ni otros proveedores",()=>{for(const f of archivos("src/proveedores")){const s=readFileSync(f,"utf8");expect(s).not.toMatch(/\/di\//);const proveedor=f.includes('/qwen/')?'deepseek':'qwen';expect(s).not.toContain(`/proveedores/${proveedor}`)}});
 test("proveedores no usan fetch directo",()=>{for(const f of archivos("src/proveedores")){expect(readFileSync(f,"utf8")).not.toMatch(/fetch\(/)}});
+test("SQL solo vive en persistencia",()=>{
+  for(const raiz of ["src/entradas","src/modulos","src/proveedores","src/nucleo"]){
+    for(const f of archivos(raiz)){const s=readFileSync(f,"utf8");expect(s).not.toMatch(/CREATE TABLE|INSERT INTO|SELECT .* FROM|UPDATE .* SET/)}
+  }
+});
+test("proveedores no conocen proyectos ni renderizado CLI",()=>{
+  for(const f of archivos("src/proveedores")){const s=readFileSync(f,"utf8");expect(s).not.toMatch(/GestorContexto|ProyectoDetectado|consola|RenderizadorStreaming/)}
+});

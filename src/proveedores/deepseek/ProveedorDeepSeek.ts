@@ -18,7 +18,7 @@ export class ProveedorDeepSeek implements ProveedorChat {
     await this.verificarDisponibilidad();
     const esNuevo = !peticion.conversacionId;
     yield { tipo: "inicio", mensaje: esNuevo ? "Creando chat nuevo..." : "Abriendo conversación..." };
-    await this.pagina.abrir(peticion.conversacionId);
+    await this.pagina.abrir(peticion.conversacionId, peticion.nuevaPestana);
     const modelo = resolverModeloDeepSeek(peticion.modelo);
     await this.pagina.preparar({ modelo, deepThink: peticion.opciones?.razonamiento, search: peticion.opciones?.busquedaWeb, archivos: peticion.archivos }, esNuevo);
     if (modelo) yield { tipo: "modelo", nombre: modelo };
@@ -30,5 +30,6 @@ export class ProveedorDeepSeek implements ProveedorChat {
   listarConversaciones(): Promise<ConversacionResumen[]> { return this.conversaciones.listar(); }
   obtenerMensajes(id: string): Promise<ConversacionChat | null> { return this.conversaciones.mensajes(id); }
   async importarSesion(): Promise<void> { await this.sesion.importar(); }
-  async diagnosticarPagina(): Promise<Record<string, unknown>> { await this.verificarDisponibilidad(); return { proveedor: this.id, modelo: await this.pagina.modeloActual() }; }
+  async diagnosticarPagina(): Promise<Record<string, unknown>> { await this.verificarDisponibilidad(); return { proveedor: this.id, modelo: await this.pagina.modeloActual(), conversacionId: await this.pagina.obtenerConversacionActual() }; }
+  obtenerConversacionActual(): Promise<string | null> { return this.pagina.obtenerConversacionActual(); }
 }

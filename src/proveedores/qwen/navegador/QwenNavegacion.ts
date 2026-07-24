@@ -1,5 +1,6 @@
 import { ErrorPaginaProveedor, ErrorProveedorNoDisponible } from "../../../nucleo/errores/ErroresAplicacion";
 import type { TransporteNavegador } from "../../../plataforma/webbridge/TransporteNavegador";
+import { SELECTORES_QWEN } from "../selectores/SelectoresQwen";
 
 const dormir = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -12,7 +13,7 @@ export class QwenNavegacion {
     }
   }
 
-  async abrirConversacion(id?: string): Promise<void> {
+  async abrirConversacion(id?: string, nuevaPestana = false): Promise<void> {
     const url = id ? `https://chat.qwen.ai/c/${id}` : "https://chat.qwen.ai/";
     let yaAbierta = false;
     try {
@@ -32,13 +33,13 @@ export class QwenNavegacion {
     }
 
     if (!yaAbierta) {
-      await this.transporte.navegar(url, false, "CAPI Qwen");
+      await this.transporte.navegar(url, nuevaPestana, "CAPI Qwen");
       await this.pausa(5000);
     }
 
     for (let i = 0; i < 15; i++) {
       const lista = await this.transporte.evaluar<boolean>(
-        "!!document.querySelector('textarea.message-input-textarea')",
+        `!!document.querySelector(${JSON.stringify(SELECTORES_QWEN.textarea)})`,
       );
       if (lista.value) {
         const host = await this.transporte.evaluar<string>("location.host");
@@ -49,5 +50,10 @@ export class QwenNavegacion {
     }
 
     throw new ErrorPaginaProveedor("El textarea de Qwen no apareció");
+  }
+
+  async obtenerConversacionActual(): Promise<string | null> {
+    const url = (await this.transporte.evaluar<string>("window.location.href")).value ?? "";
+    return url.match(/\/c\/([^/?#]+)/)?.[1] ?? null;
   }
 }

@@ -19,7 +19,7 @@ export class ProveedorQwen implements ProveedorChat {
     yield { tipo: "inicio", mensaje: "Verificando Qwen..." };
     await this.verificarDisponibilidad();
     yield { tipo: "inicio", mensaje: peticion.conversacionId ? "Abriendo conversación..." : "Creando chat nuevo..." };
-    await this.pagina.abrirConversacion(peticion.conversacionId);
+    await this.pagina.abrirConversacion(peticion.conversacionId, peticion.nuevaPestana);
     if (peticion.modelo) {
       yield { tipo: "inicio", mensaje: `Seleccionando modelo ${peticion.modelo}...` };
       const modelo = await this.seleccionarModelo(peticion.modelo);
@@ -30,4 +30,5 @@ export class ProveedorQwen implements ProveedorChat {
     yield { tipo: "inicio", mensaje: "Recibiendo respuesta..." };
     yield* this.pagina.observarStreaming();
   }
+  obtenerConversacionActual(): Promise<string | null> { return this.pagina.obtenerConversacionActual(); }
 }

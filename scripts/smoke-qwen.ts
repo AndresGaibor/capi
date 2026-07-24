@@ -7,7 +7,7 @@ for (let intento = 1; intento <= maximoIntentos; intento++) {
   console.log(`\nSmoke Qwen: intento ${intento}/${maximoIntentos}`);
   const proceso = Bun.spawnSync([
     "bun", "run", "src/cli.ts", "chat", "enviar",
-    "--proveedor", "qwen", "--modelo", "preview",
+    "--proveedor", "qwen", "--modelo", "preview", "--nueva",
     "Responde solamente con la palabra QWEN_OK",
   ], { stdout: "pipe", stderr: "pipe" });
 
@@ -29,11 +29,11 @@ for (let intento = 1; intento <= maximoIntentos; intento++) {
   console.log("Validación DOM Qwen:", estado.value);
   const valido = proceso.exitCode === 0
     && estado.value?.host === "chat.qwen.ai"
-    && estado.value?.modelo?.includes("Qwen3.8-Max-Preview")
+    && /Qwen3\.(8-Max-Preview|7-Max|7-Plus)/.test(estado.value?.modelo ?? "")
     && estado.value?.respuesta.includes("QWEN_OK");
   if (valido) process.exit(0);
 
-  const transitorio = /no produjo respuesta|awaiting-response|respuesta vacía/i.test(`${salida}\n${error}`)
+  const transitorio = /no produjo respuesta|awaiting-response|respuesta vacía|alta demanda|issue connecting/i.test(`${salida}\n${error}`)
     || !estado.value?.respuesta.includes("QWEN_OK");
   if (!transitorio) process.exit(proceso.exitCode || 1);
 }

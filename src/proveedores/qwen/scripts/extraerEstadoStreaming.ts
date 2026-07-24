@@ -76,10 +76,13 @@ export function scriptExtraerEstadoStreamingQwen(): string {
           )
         : null;
 
-      var isError = !!(
-        lastAssistant &&
-        lastAssistant.querySelector('[class*="error"]')
-      );
+      var errorNode = lastAssistant
+        ? lastAssistant.querySelector('.qwen-alert, .qwen-messsage-status, [class*="error"]')
+        : null;
+      var isError = !!errorNode;
+      var errorMessage = errorNode
+        ? (errorNode.innerText || errorNode.textContent || '').trim()
+        : '';
 
       var done = isError || (
         responseText.length > 0 &&
@@ -94,7 +97,7 @@ export function scriptExtraerEstadoStreamingQwen(): string {
         isGenerating: isGenerating,
         isAssistant: !!lastAssistant,
         isError: isError,
-        errorMessage: isError ? 'Error en la respuesta de Qwen' : '',
+        errorMessage: errorMessage || (isError ? 'Error en la respuesta de Qwen' : ''),
         isDualResponse: isDualResponse,
         alternativeCount: responseBoxes.length,
       };

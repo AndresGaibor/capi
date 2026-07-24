@@ -1,0 +1,61 @@
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import * as z from "zod/v4";
+import { crearAplicacion } from "../cli/composicion/crearAplicacion";
+import { obtenerManifestAgente, obtenerEsquemaComando } from "../cli/agente/ManifestAgente";
+
+function textoJson(data: unknown) { return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }], structuredContent: data as Record<string, unknown> }; }
+
+export function crearServidorMcp(): McpServer {
+  const server = new McpServer({ name: "capi", version: "2.2.0" });
+
+  server.registerTool("capi_discover", {
+    description: "Descubre todas las capacidades de CAPI, modelos, fallbacks, formatos, errores y comandos. Úsala primero cuando no conozcas la interfaz.", inputSchema: {},
+  }, async () => textoJson(obtenerManifestAgente()));
+
+  server.registerTool("capi_schema", {
+    description: "Obtiene el contrato exacto de un comando CAPI antes de invocarlo. Evita inventar argumentos o asumir efectos.",
+    inputSchema: { command: z.string().describe("Nombre canónico, por ejemplo chat.send, doctor o project.current") },
+  }, async ({ command }) => { const schema = obtenerEsquemaComando(command); return schema ? textoJson(schema) : { isError: true, content: [{ type: "text" as const, text: `Comando desconocido: ${command}` }] }; });
+
+  server.registerTool("capi_project_current", {
+    description: "Devuelve el proyecto detectado desde el directorio de trabajo y sus preferencias persistidas. No abre el navegador.", inputSchema: {},
+  }, async () => { const app = crearAplicacion(); const project = app.gestorContexto.proyectoActual(); return textoJson({ project, preferences: app.repositorioContexto.obtenerPreferencias(project.id) }); });
+
+  server.registerTool("capi_conversations_project", {
+    description: "Lista conversaciones del proyecto actual. Prioriza la ruta actual y luego rutas vinculadas; informa principal, favorita, archivada y ocupada.",
+    inputSchema: { includeArchived: z.boolean().optional().default(false) },
+  }, async ({ includeArchived }) => { const app = crearAplicacion(); const project = app.gestorContexto.proyectoActual(); const conversations = app.repositorioContexto.listarConversacionesProyecto(project.id).filter(c => includeArchived || !c.archivada); return textoJson({ project, conversations }); });
+
+  server.registerTool("capi_doctor", {
+    description: "Diagnostica proyecto, SQLite, bloqueos, WebBridge, Qwen y DeepSeek. Úsala antes de culpar al proveedor o modificar selectores.", inputSchema: {},
+  }, async () => textoJson(await crearAplicacion().diagnosticarCompleto.ejecutar()));
+
+  server.registerTool("capi_chat", {
+    description: "Envía un prompt al proveedor con contexto automático por proyecto. Reutiliza conversaciones libres, usa leases, reintenta alta demanda y degrada modelos. En DeepSeek cualquier degradación abre obligatoriamente un chat nuevo.",
+    inputSchema: {
+      prompt: z.string().min(1).describe("Instrucción completa y autosuficiente"),
+      provider: z.enum(["qwen", "deepseek"]).optional(), model: z.string().optional(), conversationId: z.string().optional(),
+      newConversation: z.boolean().optional().default(false), reasoning: z.boolean().optional(), webSearch: z.boolean().optional(),
+      files: z.array(z.string()).optional(), fallback: z.boolean().optional().default(true), dryRun: z.boolean().optional().default(false),
+    },
+  }, async (input) => {
+    const app = crearAplicacion(); const project = app.gestorContexto.proyectoActual(); const prefs = app.repositorioContexto.obtenerPreferencias(project.id);
+    const provider = input.provider ?? prefs?.proveedor ?? "deepseek"; const model = input.model ?? prefs?.modelo;
+    const selection = app.gestorContexto.seleccionar(provider, input.conversationId).seleccion;
+    if (input.dryRun) return textoJson({ dryRun: true, project, provider, model: model ?? "default", selection: input.newConversation ? { motivo: "nueva" } : selection, fallback: input.fallback });
+    let response = "", reasoning = "", activeModel: string | undefined, conversationId: string | undefined; const progress: string[] = [];
+    try {
+      for await (const event of app.enviarMensaje.ejecutar(provider, { prompt: input.prompt, modelo: model, conversacionId: input.conversationId, forzarNueva: input.newConversation, permitirFallback: input.fallback, archivos: input.files, opciones: { razonamiento: input.reasoning ?? prefs?.razonamiento, busquedaWeb: input.webSearch ?? prefs?.busquedaWeb } })) {
+        if (event.tipo === "respuesta") response += event.contenido; else if (event.tipo === "pensamiento") reasoning += event.contenido; else if (event.tipo === "modelo") activeModel = event.nombre; else if (event.tipo === "conversacion") conversationId = event.id; else if (event.tipo === "inicio" && event.mensaje) progress.push(event.mensaje);
+      }
+      return textoJson({ response, reasoning: reasoning || undefined, provider, model: activeModel ?? model, conversationId, project: project.nombre, progress });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error); const alternative = provider === "qwen" ? "deepseek" : "qwen";
+      return { isError: true, content: [{ type: "text" as const, text: `${message}\nSugerencia: vuelve a invocar capi_chat con provider=${alternative}.` }] };
+    }
+  });
+  return server;
+}
+
+export async function iniciarServidorMcp(): Promise<void> { const server = crearServidorMcp(); await server.connect(new StdioServerTransport()); }

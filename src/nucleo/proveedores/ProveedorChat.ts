@@ -18,4 +18,5 @@ export interface ProveedorChat {
   obtenerMensajes?(conversacionId: string): Promise<ConversacionChat | null>;
   importarSesion?(): Promise<void>;
   diagnosticarPagina?(): Promise<Record<string, unknown>>;
+  obtenerConversacionActual?(): Promise<string | null>;
 }

@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "capi": {
+      "command": "bun",
+      "args": ["run", "/ABSOLUTE/PATH/TO/capi/src/mcp.ts"]
+    }
+  }
+}
