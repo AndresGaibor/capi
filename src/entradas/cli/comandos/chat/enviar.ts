@@ -117,6 +117,13 @@ export async function ejecutarChat(args: Record<string, unknown>): Promise<void>
     const plan = { project: proyecto, provider: proveedor, model: modelo ?? "auto", selection: args.nueva ? { motivo: "nueva" } : seleccion, fallback: Boolean(args.fallback), context: { sources: fuentes, images: imagenes, classification: { text: clasificacion.textuales, images: clasificacion.imagenes, documents: clasificacion.documentos, rejected: clasificacion.rechazados }, automatic: Boolean(args.contextoAuto), incremental: Boolean(args.incremental), includeSummary: Boolean(args.resumen), includeGitDiff: Boolean(args.diff), maxBytes: args.limiteContexto ? Number(args.limiteContexto) : undefined, bundledAsSingleTextFile: args.empaquetar !== false }, actions: continuar ? ["seleccionar conversación", "navegar proveedor", "polling respuesta"] : ["seleccionar conversación", "preparar contexto", "adquirir lease", "navegar proveedor", "enviar prompt", "registrar conversación"] };
     const sobre = crearSobreExito("chat.send.dry-run", plan, { requestId });
     process.stdout.write(serializarSalida(sobre, formato === "human" ? "markdown" : formato) + "\n");
+    if (tareaId) {
+      const identidad = identidadProceso();
+      const ahora = Date.now();
+      app.repositorioContexto.actualizarEjecucionChat(tareaId,{estado:"completada",completadaEn:ahora,cancelacionSolicitada:false,propietarioId:identidad.propietarioId,pid:identidad.pid,hostname:identidad.hostname,bootId:identidad.bootId},ahora);
+      app.repositorioContexto.anexarEventoEjecucion(tareaId,"dry_run_completado",{},ahora);
+    }
+    app.repositorioContexto.cerrar();
     return;
   }
 
@@ -142,6 +149,11 @@ export async function ejecutarChat(args: Record<string, unknown>): Promise<void>
       for await (const evento of eventos) { pausada ||= evento.tipo === "pausado"; renderizador.renderizar(evento); }
     }
   } catch (error) {
+    if (tareaId) {
+      const ahora = Date.now();
+      app.repositorioContexto.actualizarEjecucionChat(tareaId,{estado:"fallida",completadaEn:ahora,errorDetalle:error instanceof Error?error.message:String(error)},ahora);
+      app.repositorioContexto.anexarEventoEjecucion(tareaId,"fallo_temprano",{mensaje:error instanceof Error?error.message:String(error)},ahora);
+    }
     if (formato === "human") { consola.error(error instanceof Error ? error.message : String(error)); consola.info(sugerenciaProveedorAlternativo(proveedor)); }
     else {
       const alternativa = proveedor === "qwen" ? "deepseek" : "qwen";
