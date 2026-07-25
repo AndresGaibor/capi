@@ -67,7 +67,7 @@ test("DeepSeek consulta el historial autenticado como respaldo", async () => {
   const eventos = [];
   for await (const evento of new DeepSeekStreaming(transporte, async () => {}).observar()) eventos.push(evento);
   expect(consultas).toBeGreaterThan(0);
-  expect(eventos).toContainEqual({ tipo: "respuesta", contenido: "RESPUESTA_API" });
+  expect(eventos).toContainEqual({ tipo: "respuesta", contenido: "RESPUESTA_API", estrategia: "historial" });
   expect(eventos.at(-1)).toEqual({ tipo: "fin" });
   expect(scripts.some(x => x.includes("Authorization: 'Bearer ' + token"))).toBeTrue();
 });

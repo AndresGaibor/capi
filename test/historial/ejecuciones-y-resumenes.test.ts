@@ -15,6 +15,6 @@ test("persiste snapshots, historial y resumen por conversación", () => {
   expect(repo.listarHistorialProyecto("p", 10)[0]).toMatchObject({ id: "e1", estado: "completada", rama: "main", respuestaCaracteres: 42, archivos: ["a.ts"] });
   repo.guardarResumenConversacion("p", "qwen", "c1", "resumen", 4);
   expect(repo.obtenerResumenConversacion("p", "qwen", "c1")).toBe("resumen");
-  expect(repo.diagnosticar().esquema).toBe(11);
+  expect(repo.diagnosticar().esquema).toBe(12);
   repo.cerrar();
 });
