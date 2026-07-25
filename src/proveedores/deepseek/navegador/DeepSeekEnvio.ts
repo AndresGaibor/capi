@@ -121,13 +121,22 @@ export class DeepSeekEnvio implements EstrategiaAdjuntos {
       btn?.click();
     })()`);
     for (let intento = 0; intento < 80; intento++) {
-      const estado = await this.transporte.evaluar<{vacio:boolean;conversacionNueva:boolean}>(`(() => {
+      const estado = await this.transporte.evaluar<{mensajeAparecio:boolean;entradaVacia:boolean;conversacionNueva:boolean;stopVisible:boolean;completionIniciada:boolean}>(`(() => {
         const entrada = document.querySelector(${JSON.stringify(SELECTORES_DEEPSEEK.textarea)});
         const valor = entrada ? ('value' in entrada ? String(entrada.value || '') : String(entrada.textContent || '')) : '';
-        return { vacio: !entrada || valor.trim() === '', conversacionNueva: location.pathname.includes('/a/chat/s/') && location.pathname !== ${JSON.stringify(rutaInicial)} };
+        const envio = window.__capiDeepSeekEnvio || {};
+        const texto = document.body.innerText || '';
+        return {
+          mensajeAparecio: Boolean(envio.prompt && texto.includes(envio.prompt)),
+          entradaVacia: !entrada || valor.trim() === '',
+          conversacionNueva: location.pathname.includes('/a/chat/s/') && location.pathname !== ${JSON.stringify(rutaInicial)},
+          stopVisible: [...document.querySelectorAll('button,[role="button"]')].some(b => /stop|detener/i.test(b.getAttribute('aria-label') || b.textContent || '')),
+          completionIniciada: Boolean(window.__capiDeepSeekCompletion?.raw || window.__capiDeepSeekCompletion?.done)
+        };
       })()`);
-      if (estado.value?.vacio || estado.value?.conversacionNueva) return;
-      if (intento === 20) {
+      const confirmado = estado.value && (estado.value.mensajeAparecio || estado.value.entradaVacia || estado.value.conversacionNueva || estado.value.stopVisible || estado.value.completionIniciada);
+      if (confirmado) return;
+      if (intento === 20 && !confirmado) {
         await this.transporte.evaluar(`(() => {
           const textarea = document.querySelector(${JSON.stringify(SELECTORES_DEEPSEEK.textarea)});
           textarea?.focus();

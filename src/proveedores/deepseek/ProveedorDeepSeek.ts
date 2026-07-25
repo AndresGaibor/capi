@@ -22,8 +22,12 @@ export class ProveedorDeepSeek implements ProveedorChat {
     const modelo = resolverModeloDeepSeek(peticion.modelo);
     await this.pagina.preparar({ modelo, deepThink: peticion.opciones?.razonamiento, search: peticion.opciones?.busquedaWeb, archivos: peticion.archivos }, esNuevo);
     if (modelo) yield { tipo: "modelo", nombre: modelo };
-    yield { tipo: "inicio", mensaje: "Enviando prompt..." };
-    await this.pagina.enviar(peticion.prompt);
+    if (!peticion.soloPoll) {
+      yield { tipo: "inicio", mensaje: "Enviando prompt..." };
+      await this.pagina.enviar(peticion.prompt);
+    } else {
+      yield { tipo: "inicio", mensaje: "Continuando polling sin reenviar el prompt..." };
+    }
     yield { tipo: "inicio", mensaje: "Recibiendo respuesta..." };
     yield* this.pagina.observar();
   }

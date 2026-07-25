@@ -41,7 +41,7 @@ export class EjecutarIntentosChat {
           {
             ...peticion,
             modelo: intento.modelo,
-            nuevaPestana: indice > 0,
+            nuevaPestana: peticion.nuevaPestana || indice > 0,
           },
           conversacionId,
         )) {
@@ -67,8 +67,9 @@ export class EjecutarIntentosChat {
 
     const mensaje =
       ultimoError instanceof Error ? ultimoError.message : String(ultimoError);
-    throw new Error(
-      `${mensaje}\n${sugerenciaProveedorAlternativo(proveedor.id)}`,
-    );
+    const error = new Error(`${mensaje}\n${sugerenciaProveedorAlternativo(proveedor.id)}`);
+    if (ultimoError && typeof ultimoError === "object" && "codigo" in ultimoError)
+      Object.assign(error, { codigo: (ultimoError as { codigo?: string }).codigo });
+    throw error;
   }
 }

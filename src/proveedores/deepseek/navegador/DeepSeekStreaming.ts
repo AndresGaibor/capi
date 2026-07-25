@@ -4,6 +4,7 @@ import type { TransporteNavegador } from "../../../plataforma/webbridge/Transpor
 import { scriptEstadoStreamingDeepSeek } from "../scripts/estadoStreaming";
 import type { EstadoStreamingDeepSeek } from "../tipos";
 import { convertirRegistroHistoria } from "../servicios/ConvertirRegistroHistoria";
+import { fusionarRespuesta } from "../servicios/FusionarRespuesta";
 const dormir=(ms:number)=>new Promise(r=>setTimeout(r,ms));
 export class DeepSeekStreaming {
   constructor(private readonly transporte: TransporteNavegador, private readonly pausa: (ms:number)=>Promise<unknown> = dormir) {}
@@ -49,15 +50,17 @@ export class DeepSeekStreaming {
       if(!ev){if(++sin>100)throw new ErrorTimeoutProveedor('No se encontró el área de respuesta de DeepSeek');continue;}
       if(ev.isError){if(reintentos++<3){await this.transporte.evaluar("document.querySelector('.ds-button--warning')?.click()");await this.pausa(1500);continue;}throw new ErrorPaginaProveedor(ev.errorMessage);}
       if(ev.think.startsWith(lt)&&ev.think.length>lt.length){yield{tipo:'pensamiento',contenido:ev.think.slice(lt.length)};lt=ev.think;}
-      if(ev.response.length>lr.length){
-        yield{tipo:'respuesta',contenido:ev.response.slice(lr.length)};lr=ev.response;sin=0;
+      const dom = fusionarRespuesta({ contenidoActual: lr, contenidoEntrante: ev.response, fuente: "dom", terminado: ev.done });
+      if(dom.contenido.length>lr.length){
+        yield{tipo:'respuesta',contenido:dom.contenido.slice(lr.length)};lr=dom.contenido;sin=0;
       } else if(lr)sin++;
       if(i>10 && i%5===0){
         const api=await this.respuestaApi(idInicial);
-        if(api.contenido.length>lr.length){yield{tipo:'respuesta',contenido:api.contenido.slice(lr.length)};lr=api.contenido;sin=0;}
+        const fusion = fusionarRespuesta({ contenidoActual: lr, contenidoEntrante: api.contenido, fuente: "api", terminado: api.terminado });
+        if(fusion.contenido.length>lr.length){yield{tipo:'respuesta',contenido:fusion.contenido.slice(lr.length)};lr=fusion.contenido;sin=0;}
         if(api.terminado&&api.contenido) confirmacionesFin++;
       }
-      if(!lr && i>20 && i%10===0){const respaldo=await this.respuestaIndexedDB(idInicial);if(respaldo){yield{tipo:'respuesta',contenido:respaldo};yield{tipo:'fin'};return;}}
+      if(!lr && i>20 && i%10===0){const respaldo=await this.respuestaIndexedDB(idInicial);if(respaldo){const fusion=fusionarRespuesta({contenidoActual:lr,contenidoEntrante:respaldo,fuente:"indexeddb",terminado:true});yield{tipo:'respuesta',contenido:fusion.contenido.slice(lr.length)};yield{tipo:'fin'};return;}}
       if(ev.done) confirmacionesFin++;
       if(lr && (confirmacionesFin >= 20 || sin > 100)){yield{tipo:'fin'};return;}
     }

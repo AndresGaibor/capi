@@ -29,6 +29,7 @@ export function scriptEnviarPromptDeepSeek(prompt: string): string {
       };
     }
     window.__capiDeepSeekCompletion = { raw:'', done:false, error:'' };
+    window.__capiDeepSeekEnvio = { id: crypto.randomUUID(), iniciadoEn: Date.now(), prompt: ${JSON.stringify(prompt)} };
     const entrada = __capiDom.primeroVisible(${JSON.stringify(SELECTORES_DEEPSEEK.entrada)}, document)
       || document.querySelector(${JSON.stringify(SELECTORES_DEEPSEEK.textarea)});
     if (!(entrada instanceof HTMLElement)) return { ok:false, error:'Entrada de DeepSeek no encontrada; estrategias: name, placeholder, contenteditable, textarea' };

@@ -96,3 +96,16 @@ test("marca una sola conversación principal por proyecto y proveedor", () => {
   expect(conversaciones.find((c) => c.id === "c2")?.principal).toBeTrue();
   r.cerrar();
 });
+
+test("conserva diagnóstico de salud y excluye inválidas de la principal", () => {
+  const r = repo();
+  r.registrarProyecto({ id: "p1", rutaRaiz: "/a", nombre: "a", tipoDeteccion: "git" });
+  r.registrarConversacion({ id: "invalida", proveedor: "qwen", proyectoLocalId: "p1" }, 2000);
+  r.registrarConversacion({ id: "activa", proveedor: "qwen", proyectoLocalId: "p1" }, 1000);
+  r.marcarConversacionPrincipal("invalida", "qwen", "p1");
+  r.marcarSaludConversacion("invalida", "qwen", "eliminada_remotamente", "CONVERSACION_INVALIDA", 3000);
+  const conversaciones = r.listarConversacionesProyecto("p1");
+  expect(conversaciones.find((c) => c.id === "invalida")).toMatchObject({ estadoSalud: "eliminada_remotamente", motivoSalud: "CONVERSACION_INVALIDA", fechaSalud: 3000, principal: false });
+  expect(conversaciones.find((c) => c.id === "activa")?.principal).toBeTrue();
+  r.cerrar();
+});

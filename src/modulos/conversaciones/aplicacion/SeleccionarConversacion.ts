@@ -6,6 +6,7 @@ export interface CandidataConversacion {
   ocupada: boolean;
   archivada: boolean;
   principal?: boolean;
+  estadoSalud?: "activa" | "invalida" | "eliminada_remotamente" | "requiere_autenticacion" | "archivada";
 }
 
 export type MotivoSeleccion = "explicita" | "reciente_ruta" | "persistente" | "compartida" | "ocupada" | "nueva" | "nueva_por_ocupacion" | "nueva_por_antiguedad";
@@ -24,7 +25,7 @@ export function seleccionarConversacion(entrada: {
   candidatas: CandidataConversacion[];
 }): ResultadoSeleccion {
   if (entrada.conversacionExplicita) return { conversacionId: entrada.conversacionExplicita, motivo: "explicita" };
-  const validas = entrada.candidatas.filter((c) => c.proveedor === entrada.proveedor && !c.archivada);
+  const validas = entrada.candidatas.filter((c) => c.proveedor === entrada.proveedor && !c.archivada && (c.estadoSalud ?? "activa") === "activa");
   const ordenadas = validas.sort((a, b) => Number(b.principal) - Number(a.principal) || b.usadaEn - a.usadaEn);
   const local = ordenadas.find((c) => c.proyectoLocalId === entrada.proyectoLocalId);
   const elegida = local ?? ordenadas[0];

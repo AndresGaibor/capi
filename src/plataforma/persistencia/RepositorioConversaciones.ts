@@ -13,7 +13,12 @@ export interface ConversacionRegistrada {
   principal: boolean;
   ocupada: boolean;
   rutaOrigen?: string;
+  estadoSalud: EstadoSaludConversacion;
+  motivoSalud?: string;
+  fechaSalud?: number;
 }
+
+export type EstadoSaludConversacion = "activa" | "invalida" | "eliminada_remotamente" | "requiere_autenticacion" | "archivada";
 
 export class RepositorioConversaciones {
   constructor(private readonly db: Database) {}
@@ -28,7 +33,7 @@ export class RepositorioConversaciones {
 
   listarProyecto(proyectoLocalId: string): ConversacionRegistrada[] {
     return this.db.query(`SELECT c.id,c.proveedor,c.proyecto_local_id AS proyectoLocalId,v.proyecto_logico_id AS proyectoLogicoId,
-      c.titulo,c.modelo,c.usada_en AS usadaEn,c.favorita,c.archivada,c.principal,p.ruta_raiz AS rutaOrigen,
+      c.titulo,c.modelo,c.usada_en AS usadaEn,c.favorita,c.archivada,c.principal,c.estado_salud AS estadoSalud,c.motivo_salud AS motivoSalud,c.fecha_salud AS fechaSalud,p.ruta_raiz AS rutaOrigen,
       CASE WHEN o.expira_en > $ahora THEN 1 ELSE 0 END AS ocupada
       FROM conversaciones c
       JOIN proyectos_locales p ON p.id=c.proyecto_local_id
@@ -53,6 +58,18 @@ export class RepositorioConversaciones {
       const partes: string[] = []; const valores: (string | number)[] = [];
       for (const [k, v] of Object.entries(cambios)) { partes.push(`${k}=?`); valores.push(v ? 1 : 0); }
       if (partes.length) this.db.query(`UPDATE conversaciones SET ${partes.join(",")} WHERE id=? AND proveedor=?`).run(...valores, id, proveedor);
+    })();
+  }
+
+  marcarSalud(id: string, proveedor: string, estado: EstadoSaludConversacion, motivo?: string, fecha = Date.now()): void {
+    this.db.transaction(() => {
+      this.db.query("UPDATE conversaciones SET estado_salud=?, motivo_salud=?, fecha_salud=?, principal=CASE WHEN ?='activa' THEN principal ELSE 0 END WHERE id=? AND proveedor=?")
+        .run(estado, motivo ?? null, fecha, estado, id, proveedor);
+      if (estado !== "activa") {
+        const reemplazo = this.db.query("SELECT id FROM conversaciones WHERE proveedor=? AND proyecto_local_id=(SELECT proyecto_local_id FROM conversaciones WHERE id=? AND proveedor=?) AND estado_salud='activa' AND archivada=0 ORDER BY usada_en DESC LIMIT 1")
+          .get(proveedor, id, proveedor) as { id?: string } | null;
+        if (reemplazo?.id) this.db.query("UPDATE conversaciones SET principal=1 WHERE id=? AND proveedor=?").run(reemplazo.id, proveedor);
+      }
     })();
   }
 }

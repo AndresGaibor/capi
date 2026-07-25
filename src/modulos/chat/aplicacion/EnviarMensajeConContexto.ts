@@ -121,6 +121,7 @@ export class EnviarMensajeConContexto {
     let errorFinal: unknown;
     let completado = false;
     let pausado = false;
+    let pensamiento = "";
 
     try {
       const intentos = this.construirIntentos(
@@ -130,20 +131,33 @@ export class EnviarMensajeConContexto {
         preparado.imagenesNativas > 0,
       );
       const intentosChat = new EjecutarIntentosChat();
-      for await (const evento of intentosChat.ejecutar(
-        proveedor,
-        peticionPreparada,
-        intentos,
-        idFinal,
-        candidatas.length,
-      )) {
-        if (evento.tipo === "pausado") pausado = true;
-        yield evento;
+      try {
+        for await (const evento of intentosChat.ejecutar(proveedor, peticionPreparada, intentos, idFinal, candidatas.length)) {
+          if (evento.tipo === "pausado") pausado = true;
+          if (evento.tipo === "pensamiento") pensamiento += evento.contenido;
+          yield evento;
+        }
+      } catch (error) {
+        if (!idFinal || !this.esConversacionInvalida(error)) throw error;
+        this.repositorio.marcarSaludConversacion?.(idFinal, proveedorId, "eliminada_remotamente", "CONVERSACION_INVALIDA");
+        const recuperacion = new EjecutarIntentosChat();
+        for await (const evento of recuperacion.ejecutar(proveedor, { ...peticionPreparada, nuevaPestana: true }, intentos.slice(0, 1), undefined, candidatas.length)) {
+          if (evento.tipo === "pausado") pausado = true;
+          if (evento.tipo === "pensamiento") pensamiento += evento.contenido;
+          yield evento;
+        }
+        intentosChat.respuesta = recuperacion.respuesta;
+        intentosChat.modelo = recuperacion.modelo;
+        intentosChat.conversacionId = recuperacion.conversacionId;
       }
       respuesta = intentosChat.respuesta;
       modeloFinal = intentosChat.modelo;
       conversacionFinal = intentosChat.conversacionId;
       completado = !pausado;
+
+      if (conversacionFinal && (pausado || peticion.soloPoll)) {
+        this.repositorio.guardarCheckpoint?.({ proyectoLocalId: proyecto.id, proveedor: proveedorId, conversacionId: conversacionFinal, motivo: pausado ? "streaming_pausado" : "continuacion_observada", pensamiento, respuesta, estado: pausado ? "pausado" : "completado" });
+      }
 
       if (conversacionFinal) {
         this.historial.registrarConversacionYAdjuntos({
@@ -180,6 +194,10 @@ export class EnviarMensajeConContexto {
               : undefined,
       });
     }
+  }
+
+  private esConversacionInvalida(error: unknown): boolean {
+    return !!error && typeof error === "object" && "codigo" in error && (error as { codigo?: string }).codigo === "CONVERSACION_INVALIDA";
   }
 
   private construirIntentos(

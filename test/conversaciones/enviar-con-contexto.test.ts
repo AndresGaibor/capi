@@ -84,3 +84,18 @@ test("cancela cooperativamente y libera leases al superar timeout", async () => 
   expect(liberada).toBeTrue();
   expect(ejecucionLiberada).toBeTrue();
 });
+
+test("recupera una sola vez conversación inválida y propaga el segundo fallo", async () => {
+  const peticiones: any[] = [];
+  const invalida = Object.assign(new Error("conversación eliminada"), { codigo: "CONVERSACION_INVALIDA" });
+  const proveedor: any = { id: "qwen", async *enviarMensaje(p: any) { peticiones.push(p); throw invalida; } };
+  const gestor: any = { seleccionar: () => ({ proyecto: { id: "p", nombre: "P" }, seleccion: { conversacionId: "vieja", motivo: "persistente" } }) };
+  const salud: any[] = [];
+  const repo: any = { ...mockRepoCompleto, listarConversacionesProyecto: () => [{ id: "vieja" }], marcarSaludConversacion: (...args: any[]) => salud.push(args) };
+  const ejecutar = async () => { for await (const _ of new EnviarMensajeConContexto({ obtener: () => proveedor } as any, gestor, repo).ejecutar("qwen", { prompt: "hola", permitirFallback: false })) {} };
+  await expect(ejecutar()).rejects.toThrow("conversación eliminada");
+  expect(peticiones).toHaveLength(2);
+  expect(peticiones[0]).toMatchObject({ conversacionId: "vieja" });
+  expect(peticiones[1]).toMatchObject({ conversacionId: undefined, nuevaPestana: true });
+  expect(salud).toEqual([["vieja", "qwen", "eliminada_remotamente", "CONVERSACION_INVALIDA"]]);
+});
