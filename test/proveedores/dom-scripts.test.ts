@@ -25,3 +25,19 @@ test("Qwen no confunde el placeholder Pensando con una respuesta final",()=>{
   expect(e.response).toBe("");
   expect(e.done).toBeFalse();
 });
+
+
+test("Qwen ignora anunciadores accesibles con clase assistant",()=>{
+  const html=`<main><div class="screen-reader-assistant-status">Acknowledging receipt of the message<br>Saltar</div><div class="qwen-chat-message qwen-chat-message-user">MARCADOR_REAL</div><div class="qwen-chat-message qwen-chat-message-assistant"><div id="chat-response-message-real"><div class="response-message-content t2t phase-answer">RESPUESTA REAL</div><div class="response-message-footer"><div role="button" class="copy"></div></div></div></div></main><textarea class="message-input-textarea"></textarea>`;
+  const dom=new JSDOM(html,{runScripts:"outside-only",url:"https://chat.qwen.ai/c/real"});
+  dom.window.sessionStorage.setItem("__capiQwenPrompt","MARCADOR_REAL");
+  const e=dom.window.eval(scriptExtraerEstadoStreamingQwen()) as any;
+  expect(e.response).toBe("RESPUESTA REAL");
+  expect(e.extractionStrategy).toBe("semantic");
+});
+
+
+test("Qwen A/B extrae contenido real y marca elección requerida",()=>{
+ const html=`<main><div class="qwen-chat-message qwen-chat-message-user">AB_PROMPT</div><div class="qwen-chat-message qwen-chat-message-assistant"><div class="smulti-o-response-message"><div class="response-message-box"><div class="smulti-o-header">Respuesta 1</div><div class="response-message-content phase-answer">PRIMERA REAL</div><button class="smulti-make-better">Prefiero esta respuesta</button></div><div class="response-message-box"><div class="smulti-o-header">Respuesta 2</div><div class="response-message-content phase-answer">SEGUNDA REAL</div><button class="smulti-make-better">Prefiero esta respuesta</button></div></div></div></main><textarea class="message-input-textarea"></textarea>`;
+ const dom=new JSDOM(html,{runScripts:"outside-only",url:"https://chat.qwen.ai/c/ab"});dom.window.sessionStorage.setItem("__capiQwenPrompt","AB_PROMPT");const e=dom.window.eval(scriptExtraerEstadoStreamingQwen()) as any;expect(e.response).toBe("PRIMERA REAL");expect(e.requiereEleccion).toBeTrue();expect(e.alternativasCompletas).toBeTrue();expect(e.done).toBeFalse();
+});

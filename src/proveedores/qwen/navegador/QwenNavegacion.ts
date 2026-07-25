@@ -54,8 +54,13 @@ export class QwenNavegacion {
     throw new ErrorPaginaProveedor("El textarea de Qwen no apareció");
   }
 
-  async obtenerConversacionActual(): Promise<string | null> {
-    const url = (await this.transporte.evaluar<string>("window.location.href")).value ?? "";
-    return url.match(/\/c\/([^/?#]+)/)?.[1] ?? null;
+  async obtenerConversacionActual(intentos = 1, esperaMs = 300): Promise<string | null> {
+    for (let intento = 0; intento < intentos; intento++) {
+      const url = (await this.transporte.evaluar<string>("window.location.href")).value ?? "";
+      const id = url.match(/\/c\/([^/?#]+)/)?.[1] ?? null;
+      if (id && id !== "new-chat") return id;
+      if (intento + 1 < intentos) await this.pausa(esperaMs);
+    }
+    return null;
   }
 }

@@ -22,8 +22,9 @@ export function scriptExtraerEstadoStreamingQwen(): string {
     const lastAssistant=asistentes.at(-1)||null;
     const cajas=lastAssistant?[...lastAssistant.querySelectorAll('.response-message-box')]:[];
     const scopes=cajas.length>1?cajas:[lastAssistant].filter(Boolean);
+    const requiereEleccion=cajas.length>1 && !!lastAssistant?.querySelector('.smulti-o-response-message,.smulti-o-prefer-choice-tip');
     const respuestas=scopes.map(scope=>{
-      const nodo=__capiDom.primeroVisible(S.contenido,scope) || scope.querySelector(S.contenido.join(','));
+      const nodo=__capiDom.primeroVisible(['.response-message-content.phase-answer','.response-message-content','.qwen-markdown'],scope) || __capiDom.primeroVisible(S.contenido,scope) || scope.querySelector(S.contenido.join(','));
       if(nodo) return __capiDom.textoLimpio(__capiDom.clonarSinRuido(nodo));
       return __capiDom.textoLimpio(__capiDom.clonarSinRuido(scope));
     }).filter(Boolean);
@@ -44,9 +45,10 @@ export function scriptExtraerEstadoStreamingQwen(): string {
     const isError=!!errorNode;
     const input=__capiDom.primeroVisible(S.entrada,document);
     const inputDisponible=!!input && !input.disabled && input.getAttribute('aria-disabled')!=='true';
-    const done=isError || (!!response && !stop && (!!toolbar || inputDisponible));
+    const alternativasCompletas=!requiereEleccion || respuestas.length===cajas.length;
+    const done=isError || (!!response && !stop && !requiereEleccion && (!!toolbar || inputDisponible));
     return { think, response, done, isGenerating:!!stop, isAssistant:!!lastAssistant, isError,
       errorMessage:__capiDom.textoLimpio(errorNode)||(isError?'Error en la respuesta de Qwen':''),
-      isDualResponse:cajas.length>1, alternativeCount:cajas.length, extractionStrategy: response ? (lastAssistant?.querySelector(S.contenido.join(','))?'semantic':'structural') : 'none' };
+      isDualResponse:cajas.length>1, alternativeCount:cajas.length, requiereEleccion, alternativasCompletas, extractionStrategy: response ? (lastAssistant?.querySelector(S.contenido.join(','))?'semantic':'structural') : 'none' };
   })()`;
 }

@@ -40,7 +40,7 @@ export class ProveedorQwen implements ProveedorChat {
     } else {
       yield { tipo: "inicio", mensaje: "Continuando polling..." };
     }
-    const conversacionActual = await this.pagina.obtenerConversacionActual?.();
+    const conversacionActual = await this.pagina.obtenerConversacionActual?.(peticion.conversacionId ? 1 : 40);
     if (conversacionActual && conversacionActual !== peticion.conversacionId) {
       yield { tipo: "conversacion", id: conversacionActual };
     }

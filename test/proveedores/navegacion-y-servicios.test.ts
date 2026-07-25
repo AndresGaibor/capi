@@ -25,3 +25,11 @@ test("Qwen fuerza la raíz al crear un chat nuevo desde /c", async () => {
   await new QwenNavegacion(transporte, async()=>{}).abrirConversacion();
   expect(navegaciones).toEqual(["https://chat.qwen.ai/"]);
 });
+
+
+test("Qwen espera el UUID real después de enviar un chat nuevo",async()=>{
+  let lecturas=0;
+  const transporte:any={evaluar:async(c:string)=>({value:c.includes("window.location.href")?(++lecturas<3?"https://chat.qwen.ai/":"https://chat.qwen.ai/c/uuid-real"):true}),estaDisponible:async()=>true,navegar:async()=>{}};
+  const navegacion=new QwenNavegacion(transporte,async()=>{});
+  expect(await navegacion.obtenerConversacionActual(5,0)).toBe("uuid-real");
+});

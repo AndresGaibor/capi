@@ -9,11 +9,11 @@ import { LectorTelemetriaQwen } from './LectorTelemetriaQwen';
 const dormir=(ms:number)=>new Promise(r=>setTimeout(r,ms));
 const normalizar=(t:string)=>t.replace(/\u200B/g,'').replace(/\r\n/g,'\n').replace(/[ \t]+\n/g,'\n').trim();
 const CFG=configuracionProveedor('qwen');
-interface EstadoQwen {think:string;response:string;done:boolean;isGenerating?:boolean;isAssistant:boolean;isError:boolean;errorMessage:string;extractionStrategy?:string;}
+interface EstadoQwen {think:string;response:string;done:boolean;isGenerating?:boolean;isAssistant:boolean;isError:boolean;errorMessage:string;extractionStrategy?:string;requiereEleccion?:boolean;alternativasCompletas?:boolean;}
 export class QwenStreaming{
  constructor(private readonly transporte:TransporteNavegador,private readonly pausa:(ms:number)=>Promise<unknown>=dormir,private readonly ahora:()=>number=Date.now){}
  async *observar():AsyncGenerator<EventoStreaming>{
-  let ultimoPensamiento='',ultimaRespuesta='',observada='',ultimoCambio=this.ahora(),ultimoSnapshot=0,ultimoHeartbeat=0,fallos=0,urlRecuperacion:string|undefined,conversacion:string|undefined,estancado=false;
+  let ultimoPensamiento='',ultimaRespuesta='',observada='',ultimoCambio=this.ahora(),ultimoSnapshot=0,ultimoHeartbeat=0,fallos=0,urlRecuperacion:string|undefined,conversacion:string|undefined,estancado=false,eleccionIntentada=false;
   const lector=new LectorTelemetriaQwen(this.transporte,this.ahora); const progreso=new DetectorProgresoProveedor(this.ahora());
   while(true){
    await this.pausa(CFG.intervaloPollingMs); const ahora=this.ahora(); let evento:EstadoQwen|undefined;
@@ -21,6 +21,12 @@ export class QwenStreaming{
    catch{fallos++;if(fallos>=CFG.maxReintentosConsecutivosAntesRecuperar&&this.transporte.recuperarPestana){yield{tipo:'estado',estado:'desconectado',progresoDetectado:false,estrategia:'dom',detalles:`reintento ${fallos}`};await this.transporte.recuperarPestana('chat.qwen.ai',urlRecuperacion)}continue}
    const tm=await lector.leer(conversacion); const tele=tm.valor;
    if(evento?.isError){yield{tipo:'error',mensaje:evento.errorMessage||'Error en Qwen',recuperable:true};return}
+   if(evento?.requiereEleccion&&evento.alternativasCompletas&&!eleccionIntentada){
+    eleccionIntentada=true;
+    const seleccion=await this.transporte.evaluar<boolean>(`(()=>{const cajas=[...document.querySelectorAll('.response-message-box')];const primera=cajas[0];const boton=primera?.querySelector('button.smulti-make-better,.smulti-make-better,[role="button"]');if(!(boton instanceof HTMLElement))return false;boton.click();return true})()`);
+    yield{tipo:'estado',estado:'esperando_respuesta',progresoDetectado:!!seleccion.value,estrategia:'dom',detalles:seleccion.value?'alternativa_1_seleccionada':'eleccion_no_disponible'};
+    if(seleccion.value){ultimoPensamiento='';ultimaRespuesta='';observada='';ultimoCambio=ahora;await this.pausa(500);continue}
+   }
    const pensamiento=normalizar(evento?.think||''); let respuesta=normalizar(evento?.response||'');
    if(!respuesta&&/pensamiento completado/i.test(pensamiento)&&this.transporte.snapshotAccesibilidad&&ahora-ultimoSnapshot>=CFG.intervaloSnapshotMs){ultimoSnapshot=ahora;try{respuesta=normalizar(extraerRespuestaSnapshotQwen((await this.transporte.snapshotAccesibilidad()).tree))}catch{}}
    const firma=`${pensamiento.length}:${respuesta.length}:${evento?.isGenerating?1:0}:${evento?.done?1:0}:${tele?.firmaEstado??''}`;

@@ -35,7 +35,7 @@ export class QwenPaginaChat {
   adjuntar(rutas: string[] = []): Promise<ResultadoAdjuntos> { return this.envio.adjuntar(rutas); }
   enviarPrompt(prompt: string): Promise<void> { return this.envio.enviar(prompt); }
   observarStreaming(): AsyncGenerator<EventoStreaming> { return this.streaming.observar(); }
-  async obtenerConversacionActual(): Promise<string | null> { return this.navegacion.obtenerConversacionActual(); }
+  async obtenerConversacionActual(intentos = 1): Promise<string | null> { return this.navegacion.obtenerConversacionActual(intentos); }
   listarConversaciones(): Promise<ResumenConversacionQwen[]> { return this.conversaciones.listar(); }
   async diagnosticar(): Promise<Record<string, unknown>> { return (await this.transporte.evaluar<Record<string, unknown>>(scriptDiagnosticarPagina("qwen"))).value ?? { proveedor: "qwen", ok: false, codigo: "PAGINA_NO_COMPATIBLE" }; }
 }

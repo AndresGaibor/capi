@@ -23,7 +23,7 @@ export const SELECTORES_QWEN = {
     '[role="button"][aria-label*="stop" i]',
   ],
   mensaje: ['[data-message-role]', '[data-role]', '.qwen-chat-message', '[class*="chat-message-item"]', '[class*="message-item"]'],
-  asistente: ['[data-message-role="assistant"]','[data-role="assistant"]','[data-testid*="assistant" i]','.qwen-chat-message-assistant','[class*="assistant"]'],
+  asistente: ['[data-message-role="assistant"]','[data-role="assistant"]','[data-testid*="assistant" i]','.qwen-chat-message-assistant','[class*="assistant-message"]'],
   contenido: ['[data-testid="assistant-content"]','[data-testid*="message-content" i]','article','.response-message-content','.qwen-markdown','[class*="response-message-content"]'],
   pensamiento: ['[data-testid*="thinking" i]','.qwen-thinking-status-card-title-text','.qwen-thinking-selector','[class*="thinking"]','[class*="tool-status"]'],
   toolbar: ['[role="toolbar"]','nav button[aria-label*="copiar" i]','button[aria-label*="copiar" i]','button[aria-label*="copy" i]','button[aria-label*="regenerar" i]','button[aria-label*="regenerate" i]'],
