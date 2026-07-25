@@ -1,4 +1,5 @@
 import { Database } from "bun:sqlite";
+import { RepositorioSaludConversaciones } from "./RepositorioSaludConversaciones";
 
 export interface ConversacionRegistrada {
   id: string;
@@ -21,7 +22,8 @@ export interface ConversacionRegistrada {
 export type EstadoSaludConversacion = "activa" | "invalida" | "eliminada_remotamente" | "requiere_autenticacion" | "archivada";
 
 export class RepositorioConversaciones {
-  constructor(private readonly db: Database) {}
+  private readonly salud: RepositorioSaludConversaciones;
+  constructor(private readonly db: Database) { this.salud = new RepositorioSaludConversaciones(db); }
 
   registrar(entrada: { id: string; proveedor: string; proyectoLocalId: string; titulo?: string; modelo?: string }, ahora = Date.now()): void {
     this.db.query(`INSERT INTO conversaciones(id,proveedor,proyecto_local_id,titulo,modelo,usada_en)
@@ -62,14 +64,6 @@ export class RepositorioConversaciones {
   }
 
   marcarSalud(id: string, proveedor: string, estado: EstadoSaludConversacion, motivo?: string, fecha = Date.now()): void {
-    this.db.transaction(() => {
-      this.db.query("UPDATE conversaciones SET estado_salud=?, motivo_salud=?, fecha_salud=?, principal=CASE WHEN ?='activa' THEN principal ELSE 0 END WHERE id=? AND proveedor=?")
-        .run(estado, motivo ?? null, fecha, estado, id, proveedor);
-      if (estado !== "activa") {
-        const reemplazo = this.db.query("SELECT id FROM conversaciones WHERE proveedor=? AND proyecto_local_id=(SELECT proyecto_local_id FROM conversaciones WHERE id=? AND proveedor=?) AND estado_salud='activa' AND archivada=0 ORDER BY usada_en DESC LIMIT 1")
-          .get(proveedor, id, proveedor) as { id?: string } | null;
-        if (reemplazo?.id) this.db.query("UPDATE conversaciones SET principal=1 WHERE id=? AND proveedor=?").run(reemplazo.id, proveedor);
-      }
-    })();
+    this.salud.marcar(id, proveedor, estado, motivo, fecha);
   }
 }

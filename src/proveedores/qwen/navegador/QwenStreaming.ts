@@ -84,7 +84,7 @@ export class QwenStreaming {
 
       if (yieldPausado) {
         const conversacionId = await this.obtenerConversacionActual();
-        yield { tipo: "pausado", motivo: "Timeout — Qlik aún está procesando. Puedes retomar con 'capi chat --continuar'", conversacionId: conversacionId ?? undefined };
+        yield { tipo: "pausado", motivo: "Qwen continúa procesando la respuesta. Puedes retomarla con 'capi chat --continuar'", conversacionId: conversacionId ?? undefined };
         return;
       }
     }

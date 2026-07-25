@@ -18,3 +18,10 @@ test("Qwen extrae respuesta por estructura semántica sin clases históricas",()
 test("Qwen ignora un control Stop oculto",()=>{const e=ejecutar<any>(readFileSync("test/fixtures/qwen/stop-oculto.html","utf8"),scriptExtraerEstadoStreamingQwen());expect(e.response).toBe("OK OCULTO");expect(e.isGenerating).toBeFalse();expect(e.done).toBeTrue()});
 test("DeepSeek ignora clases response y stop irrelevantes",()=>{const e=ejecutar<any>(readFileSync("test/fixtures/deepseek/falsos-positivos.html","utf8"),scriptEstadoStreamingDeepSeek());expect(e.response).toBe("RESPUESTA REAL");expect(e.done).toBeTrue()});
 test("Qwen detecta conversación eliminada fuera del mensaje",()=>{const e=ejecutar<any>(readFileSync("test/fixtures/qwen/conversacion-eliminada.html","utf8"),scriptExtraerEstadoStreamingQwen());expect(e.isError).toBeTrue();expect(e.errorMessage).toContain("eliminada")});
+
+test("Qwen no confunde el placeholder Pensando con una respuesta final",()=>{
+  const html='<main><div class="qwen-chat-message-assistant"><div class="response-message-content">Pensando...</div><nav><button>Copiar</button></nav></div></main><textarea aria-label="¿Cómo puedo ayudarte?"></textarea>';
+  const e=ejecutar<any>(html,scriptExtraerEstadoStreamingQwen());
+  expect(e.response).toBe("");
+  expect(e.done).toBeFalse();
+});

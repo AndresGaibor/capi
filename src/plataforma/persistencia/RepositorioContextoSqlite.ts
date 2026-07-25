@@ -13,6 +13,7 @@ import { RepositorioEjecuciones } from "./RepositorioEjecuciones";
 import { RepositorioPreferencias } from "./RepositorioPreferencias";
 import { RepositorioHistorial } from "./RepositorioHistorial";
 import { RepositorioCache } from "./RepositorioCache";
+import { RepositorioCheckpointsChat, type CheckpointChat } from "./RepositorioCheckpointsChat";
 
 export { type ConversacionRegistrada } from "./RepositorioConversaciones";
 
@@ -24,6 +25,7 @@ export class RepositorioContextoSqlite {
   readonly preferencias: RepositorioPreferencias;
   readonly historial: RepositorioHistorial;
   readonly cache: RepositorioCache;
+  readonly checkpoints: RepositorioCheckpointsChat;
 
   private readonly db: Database;
 
@@ -40,6 +42,7 @@ export class RepositorioContextoSqlite {
     this.preferencias = new RepositorioPreferencias(this.db);
     this.historial = new RepositorioHistorial(this.db);
     this.cache = new RepositorioCache(this.db);
+    this.checkpoints = new RepositorioCheckpointsChat(this.db);
   }
 
   registrarProyecto(
@@ -320,14 +323,12 @@ export class RepositorioContextoSqlite {
     return this.cache.obtenerMetricas(proyectoLocalId);
   }
 
-  guardarCheckpoint(entrada: { proyectoLocalId: string; proveedor: string; conversacionId: string; motivo: string; pensamiento: string; respuesta: string; estado: "pausado" | "completado" }, actualizadoEn = Date.now()): void {
-    this.db.query(`INSERT INTO checkpoints_chat(proyecto_local_id,proveedor,conversacion_id,motivo,pensamiento,respuesta,estado,actualizado_en) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(proyecto_local_id,proveedor,conversacion_id) DO UPDATE SET motivo=excluded.motivo,pensamiento=excluded.pensamiento,respuesta=excluded.respuesta,estado=excluded.estado,actualizado_en=excluded.actualizado_en`)
-      .run(entrada.proyectoLocalId, entrada.proveedor, entrada.conversacionId, entrada.motivo, entrada.pensamiento, entrada.respuesta, entrada.estado, actualizadoEn);
+  guardarCheckpoint(entrada: Omit<CheckpointChat, "actualizadoEn">, actualizadoEn = Date.now()): void {
+    this.checkpoints.guardar(entrada, actualizadoEn);
   }
 
-  obtenerCheckpoint(proyectoLocalId: string, proveedor: string, conversacionId: string): { proyectoLocalId: string; proveedor: string; conversacionId: string; motivo: string; pensamiento: string; respuesta: string; estado: "pausado" | "completado"; actualizadoEn: number } | null {
-    const fila = this.db.query(`SELECT proyecto_local_id AS proyectoLocalId,proveedor,conversacion_id AS conversacionId,motivo,pensamiento,respuesta,estado,actualizado_en AS actualizadoEn FROM checkpoints_chat WHERE proyecto_local_id=? AND proveedor=? AND conversacion_id=?`).get(proyectoLocalId, proveedor, conversacionId);
-    return (fila as any) ?? null;
+  obtenerCheckpoint(proyectoLocalId: string, proveedor: string, conversacionId: string): CheckpointChat | null {
+    return this.checkpoints.obtener(proyectoLocalId, proveedor, conversacionId);
   }
 
   limpiarProyecto(

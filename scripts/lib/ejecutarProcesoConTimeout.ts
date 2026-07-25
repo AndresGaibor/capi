@@ -5,15 +5,24 @@ export interface ResultadoProceso {
   timeout: boolean;
 }
 
+export interface OpcionesProcesoConTimeout {
+  cwd?: string;
+  env?: Record<string, string>;
+}
+
 export async function ejecutarProcesoConTimeout(
   comando: string[],
   timeoutMs: number,
-  env?: Record<string, string>,
+  opciones?: OpcionesProcesoConTimeout | Record<string, string>,
 ): Promise<ResultadoProceso> {
+  const procesoOpciones: OpcionesProcesoConTimeout = opciones && ("cwd" in opciones || "env" in opciones)
+    ? opciones as OpcionesProcesoConTimeout
+    : { env: opciones as Record<string, string> | undefined };
   const proceso = Bun.spawn(comando, {
     stdout: "pipe",
     stderr: "pipe",
-    env: { ...process.env, ...env },
+    cwd: procesoOpciones.cwd,
+    env: { ...process.env, ...procesoOpciones.env },
   });
 
   let timeout = false;

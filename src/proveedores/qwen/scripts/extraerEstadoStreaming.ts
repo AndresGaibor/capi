@@ -34,6 +34,7 @@ export function scriptExtraerEstadoStreamingQwen(): string {
     let response=respuestas[0]||'';
     const think=pensamientos[0]||'';
     if(response && think && response.startsWith(think)) response=response.slice(think.length).trim();
+    if (/^(?:pensando|thinking)(?:\.\.\.)?$/i.test(response)) response='';
     const stop=__capiDom.primeroVisible(S.detenerCandidatos,document);
     const toolbar=lastAssistant && (__capiDom.primeroVisible(S.toolbar,lastAssistant) || lastAssistant.querySelector(S.toolbar.join(',')));
     const erroresGlobales=[...document.querySelectorAll('[role="alert"],.qwen-alert,.qwen-messsage-status,[data-testid*="error" i],[class*="toast" i],[class*="message-notice" i]')];
