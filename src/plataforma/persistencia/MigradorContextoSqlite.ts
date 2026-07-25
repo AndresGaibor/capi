@@ -1,6 +1,6 @@
 import type { Database } from "bun:sqlite";
 
-export const ESQUEMA_CONTEXTO = 11;
+export const ESQUEMA_CONTEXTO = 12;
 
 export function migrarContextoSqlite(db: Database): void {
   db.exec(`
@@ -15,10 +15,13 @@ export function migrarContextoSqlite(db: Database): void {
     CREATE TABLE IF NOT EXISTS ejecuciones_historial (id TEXT PRIMARY KEY, proyecto_local_id TEXT NOT NULL, proveedor TEXT NOT NULL, modelo TEXT, conversacion_id TEXT, rama TEXT, commit_git TEXT, iniciado_en INTEGER NOT NULL, finalizado_en INTEGER, estado TEXT NOT NULL, contexto_hash TEXT, archivos_json TEXT, respuesta_caracteres INTEGER NOT NULL DEFAULT 0, error TEXT);
     CREATE TABLE IF NOT EXISTS resumenes_conversacion (proyecto_local_id TEXT NOT NULL, proveedor TEXT NOT NULL, conversacion_id TEXT NOT NULL, resumen TEXT NOT NULL, actualizado_en INTEGER NOT NULL, PRIMARY KEY(proyecto_local_id, proveedor, conversacion_id));
     CREATE TABLE IF NOT EXISTS cache_adjuntos (proyecto_local_id TEXT NOT NULL, proveedor TEXT NOT NULL, conversacion_id TEXT NOT NULL, hash TEXT NOT NULL, ruta TEXT NOT NULL, confirmado_en INTEGER NOT NULL, PRIMARY KEY(proyecto_local_id, proveedor, conversacion_id, hash));
-    CREATE TABLE IF NOT EXISTS ejecuciones_chat_activas (id TEXT PRIMARY KEY, proyecto_local_id TEXT NOT NULL, proveedor TEXT NOT NULL, modelo TEXT, conversacion_id TEXT, estado TEXT NOT NULL, prompt_hash TEXT, respuesta_parcial TEXT NOT NULL DEFAULT '', pensamiento_parcial TEXT NOT NULL DEFAULT '', estrategia TEXT, propietario_id TEXT NOT NULL, ultimo_progreso_en INTEGER NOT NULL, ultimo_sondeo_en INTEGER, creada_en INTEGER NOT NULL, actualizada_en INTEGER NOT NULL, completada_en INTEGER, error_codigo TEXT, error_detalle TEXT, cancelacion_solicitada INTEGER NOT NULL DEFAULT 0, reintentos INTEGER NOT NULL DEFAULT 0);
+    CREATE TABLE IF NOT EXISTS ejecuciones_chat_activas (id TEXT PRIMARY KEY, proyecto_local_id TEXT NOT NULL, proveedor TEXT NOT NULL, modelo TEXT, conversacion_id TEXT, estado TEXT NOT NULL, prompt_hash TEXT, respuesta_parcial TEXT NOT NULL DEFAULT '', pensamiento_parcial TEXT NOT NULL DEFAULT '', estrategia TEXT, propietario_id TEXT NOT NULL, ultimo_progreso_en INTEGER NOT NULL, ultimo_sondeo_en INTEGER, creada_en INTEGER NOT NULL, actualizada_en INTEGER NOT NULL, completada_en INTEGER, error_codigo TEXT, error_detalle TEXT, cancelacion_solicitada INTEGER NOT NULL DEFAULT 0, reintentos INTEGER NOT NULL DEFAULT 0, pid INTEGER, hostname TEXT, boot_id TEXT, modo TEXT NOT NULL DEFAULT 'foreground', comando_json TEXT, ultima_secuencia INTEGER NOT NULL DEFAULT 0);
     CREATE TABLE IF NOT EXISTS envios_idempotentes (huella TEXT PRIMARY KEY, proveedor TEXT NOT NULL, conversacion_id TEXT, prompt_hash TEXT NOT NULL, archivos_hash TEXT, estado TEXT NOT NULL, creado_en INTEGER NOT NULL, actualizado_en INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS eventos_ejecucion_chat (ejecucion_id TEXT NOT NULL REFERENCES ejecuciones_chat_activas(id) ON DELETE CASCADE, secuencia INTEGER NOT NULL, tipo TEXT NOT NULL, datos_json TEXT NOT NULL, creado_en INTEGER NOT NULL, PRIMARY KEY(ejecucion_id,secuencia));
     CREATE TABLE IF NOT EXISTS checkpoints_chat (proyecto_local_id TEXT NOT NULL, proveedor TEXT NOT NULL, conversacion_id TEXT NOT NULL, motivo TEXT NOT NULL, pensamiento TEXT NOT NULL DEFAULT '', respuesta TEXT NOT NULL DEFAULT '', estado TEXT NOT NULL, actualizado_en INTEGER NOT NULL, PRIMARY KEY(proyecto_local_id, proveedor, conversacion_id));
+    CREATE INDEX IF NOT EXISTS idx_ejecuciones_estado_actualizada ON ejecuciones_chat_activas(estado,actualizada_en);
+    CREATE INDEX IF NOT EXISTS idx_eventos_ejecucion_fecha ON eventos_ejecucion_chat(ejecucion_id,creado_en);
+    CREATE INDEX IF NOT EXISTS idx_envios_actualizado ON envios_idempotentes(actualizado_en);
     PRAGMA user_version=${ESQUEMA_CONTEXTO};
   `);
   const columnas = db.query("PRAGMA table_info(conversaciones)").all() as Array<{ name: string }>;
@@ -28,4 +31,8 @@ export function migrarContextoSqlite(db: Database): void {
     db.exec("ALTER TABLE conversaciones ADD COLUMN motivo_salud TEXT");
   if (!columnas.some((columna) => columna.name === "fecha_salud"))
     db.exec("ALTER TABLE conversaciones ADD COLUMN fecha_salud INTEGER");
+  const columnasEjecucion = db.query("PRAGMA table_info(ejecuciones_chat_activas)").all() as Array<{ name: string }>;
+  const extras: Array<[string,string]> = [["pid","INTEGER"],["hostname","TEXT"],["boot_id","TEXT"],["modo","TEXT NOT NULL DEFAULT 'foreground'"],["comando_json","TEXT"],["ultima_secuencia","INTEGER NOT NULL DEFAULT 0"]];
+  for (const [nombre,tipo] of extras) if (!columnasEjecucion.some(c=>c.name===nombre)) db.exec(`ALTER TABLE ejecuciones_chat_activas ADD COLUMN ${nombre} ${tipo}`);
+
 }

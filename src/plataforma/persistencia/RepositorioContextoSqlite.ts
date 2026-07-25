@@ -336,8 +336,13 @@ export class RepositorioContextoSqlite {
   listarEjecucionesChat(limite=100): EjecucionChatDurable[] { return this.ejecucionesChat.listar(limite); }
   anexarEventoEjecucion(id:string,tipo:string,datos:Record<string,unknown>,ahora=Date.now()){ return this.ejecucionesChat.anexarEvento(id,tipo,datos,ahora); }
   listarEventosEjecucion(id:string,desde=0){ return this.ejecucionesChat.listarEventos(id,desde); }
-  solicitarCancelacionEjecucion(id:string,ahora=Date.now()){ this.ejecucionesChat.solicitarCancelacion(id,ahora); }
+  solicitarCancelacionEjecucion(id:string,ahora=Date.now()){ return this.ejecucionesChat.solicitarCancelacion(id,ahora); }
   marcarEjecucionReanudable(id:string,ahora=Date.now()){ this.ejecucionesChat.marcarReanudable(id,ahora); }
+  adoptarEjecucionChat(id:string,nuevo:{propietarioId:string;pid:number;hostname:string;bootId:string},ahora=Date.now()){ return this.ejecucionesChat.adoptar(id,nuevo,ahora); }
+  reconciliarEjecucionesChat(esVivo:(e:EjecucionChatDurable)=>boolean,umbralMs=90_000,ahora=Date.now()){ return this.ejecucionesChat.reconciliarHuerfanas(esVivo,umbralMs,ahora); }
+  compactarEjecucionChat(id:string,conservar=10){ return this.ejecucionesChat.compactar(id,conservar); }
+  limpiarEjecucionesChat(anterioresA:number){ return this.ejecucionesChat.limpiarTerminales(anterioresA); }
+  metricasEjecucionesChat(){ return this.ejecucionesChat.metricas(); }
 
   obtenerMetricasProyecto(proyectoLocalId: string): any {
     return this.cache.obtenerMetricas(proyectoLocalId);

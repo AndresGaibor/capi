@@ -8,7 +8,7 @@ import { sugerenciaProveedorAlternativo } from "../../../../modulos/chat/aplicac
 import { interpretarFuentesContexto } from "../../../../modulos/contexto/aplicacion/InterpretarFuentesContexto";
 import { separarAdjuntosContexto } from "../../../../modulos/contexto/aplicacion/SepararAdjuntosContexto";
 import { spawn } from "node:child_process";
-import { actualizarTarea, crearTarea } from "../../soporte/tareas";
+import { identidadProceso } from "../../../../plataforma/procesos/IdentidadProceso";
 
 function normalizarConversacionId(valor: string): string {
   try {
@@ -77,16 +77,7 @@ export async function ejecutarChat(args: Record<string, unknown>): Promise<void>
   const formato = String(args.output ?? "human") as FormatoSalida;
   const requestId = args.requestId ? String(args.requestId) : crypto.randomUUID();
   if (!formatos.has(formato)) throw new Error(`Formato no soportado: ${formato}`);
-  if (args.background && !process.env.CAPI_TASK_CHILD) {
-    const tarea = crearTarea();
-    const argumentos = process.argv.slice(2).filter((argumento) => argumento !== "--background" && !argumento.startsWith("--background="));
-    const hijo = spawn(process.execPath, [process.argv[1]!, ...argumentos], { detached: true, stdio: "ignore", env: { ...process.env, CAPI_TASK_CHILD: "1", CAPI_TASK_ID: tarea.id } });
-    hijo.unref();
-    process.stdout.write(`${JSON.stringify({ taskId: tarea.id, estado: tarea.estado, comando: `capi tareas estado ${tarea.id}` })}\n`);
-    return;
-  }
   const tareaId = process.env.CAPI_TASK_ID;
-  if (tareaId) actualizarTarea(tareaId, { estado: "ejecutando" });
   const app = crearAplicacion();
   const proyecto = app.gestorContexto.proyectoActual();
   const preferencias = app.repositorioContexto.obtenerPreferencias(proyecto.id);
@@ -107,6 +98,18 @@ export async function ejecutarChat(args: Record<string, unknown>): Promise<void>
   const imagenes = continuar ? [] : recogerImagenesArgumentos(args);
 
   if (continuar && !conversacionId) throw new Error("No se encontró una conversación activa. Usa --conversacion URL_O_ID.");
+  if (args.background && !process.env.CAPI_TASK_CHILD) {
+    const id = crypto.randomUUID();
+    const identidad = identidadProceso();
+    const argumentos = process.argv.slice(2).filter((argumento) => argumento !== "--background" && !argumento.startsWith("--background="));
+    app.repositorioContexto.crearEjecucionChat({ id, proyectoLocalId: proyecto.id, proveedor, modelo, conversacionId, estado: "creada", propietarioId: identidad.propietarioId, pid: identidad.pid, hostname: identidad.hostname, bootId: identidad.bootId, modo: "background", comandoJson: JSON.stringify(argumentos) });
+    app.repositorioContexto.anexarEventoEjecucion(id,"tarea_background_creada",{argumentos:argumentos.map((a)=>a.startsWith("--")?a:"[ARG]")});
+    app.repositorioContexto.cerrar();
+    const hijo = spawn(process.execPath, [process.argv[1]!, ...argumentos], { detached: true, stdio: "ignore", env: { ...process.env, CAPI_TASK_CHILD: "1", CAPI_TASK_ID: id } });
+    hijo.unref();
+    process.stdout.write(`${JSON.stringify({ taskId:id, estado:"creada", comando:`capi tareas estado ${id}` })}\n`);
+    return;
+  }
 
   if (args.dryRun) {
     const fuentes = continuar ? [] : interpretarFuentesContexto(args.archivo ? String(args.archivo) : undefined);
@@ -114,7 +117,6 @@ export async function ejecutarChat(args: Record<string, unknown>): Promise<void>
     const plan = { project: proyecto, provider: proveedor, model: modelo ?? "auto", selection: args.nueva ? { motivo: "nueva" } : seleccion, fallback: Boolean(args.fallback), context: { sources: fuentes, images: imagenes, classification: { text: clasificacion.textuales, images: clasificacion.imagenes, documents: clasificacion.documentos, rejected: clasificacion.rechazados }, automatic: Boolean(args.contextoAuto), incremental: Boolean(args.incremental), includeSummary: Boolean(args.resumen), includeGitDiff: Boolean(args.diff), maxBytes: args.limiteContexto ? Number(args.limiteContexto) : undefined, bundledAsSingleTextFile: args.empaquetar !== false }, actions: continuar ? ["seleccionar conversación", "navegar proveedor", "polling respuesta"] : ["seleccionar conversación", "preparar contexto", "adquirir lease", "navegar proveedor", "enviar prompt", "registrar conversación"] };
     const sobre = crearSobreExito("chat.send.dry-run", plan, { requestId });
     process.stdout.write(serializarSalida(sobre, formato === "human" ? "markdown" : formato) + "\n");
-    if (tareaId) actualizarTarea(tareaId, { estado: "completada", conversacionId });
     return;
   }
 
@@ -134,15 +136,12 @@ export async function ejecutarChat(args: Record<string, unknown>): Promise<void>
       if (args.explain) consola.info(`Proyecto=${proyecto.nombre}; proveedor=${proveedor}; modelo=${modelo ?? "predeterminado"}; selección=${seleccion.motivo}${continuar ? " (solo polling)" : ""}`);
       let pausada = false;
       for await (const evento of eventos) { pausada ||= evento.tipo === "pausado"; renderizador.renderizar(evento); }
-      if (tareaId) actualizarTarea(tareaId, { estado: pausada ? "pausada" : "completada", conversacionId });
     } else {
       const renderizador = new RenderizadorAgenteStreaming("chat.send", formato, requestId);
       let pausada = false;
       for await (const evento of eventos) { pausada ||= evento.tipo === "pausado"; renderizador.renderizar(evento); }
-      if (tareaId) actualizarTarea(tareaId, { estado: pausada ? "pausada" : "completada", conversacionId });
     }
   } catch (error) {
-    if (tareaId) actualizarTarea(tareaId, { estado: "fallida", conversacionId, error: error instanceof Error ? error.message : String(error) });
     if (formato === "human") { consola.error(error instanceof Error ? error.message : String(error)); consola.info(sugerenciaProveedorAlternativo(proveedor)); }
     else {
       const alternativa = proveedor === "qwen" ? "deepseek" : "qwen";

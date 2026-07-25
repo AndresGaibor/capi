@@ -11,6 +11,7 @@ import { RegistroChatHistorial } from "./RegistroChatHistorial";
 import { prepararContextoChat, obtenerGit } from "./PrepararContextoChat";
 import { EjecutarIntentosChat } from "./EjecutarIntentosChat";
 import { SupervisorEjecucionChat } from "./SupervisorEjecucionChat";
+import { identidadProceso } from "../../../plataforma/procesos/IdentidadProceso";
 import { createHash } from "node:crypto";
 
 export class EnviarMensajeConContexto {
@@ -41,8 +42,8 @@ export class EnviarMensajeConContexto {
       : seleccion.conversacionId;
     const cwd = peticion.contexto?.cwd ?? proyecto.rutaRaiz ?? process.cwd();
     const ejecucionId = process.env.CAPI_TASK_ID || crypto.randomUUID();
-    const propietarioId = `${process.pid}-${crypto.randomUUID()}`;
-    const supervisor = new SupervisorEjecucionChat(this.repositorio, { id: ejecucionId, proyectoLocalId: proyecto.id, proveedor: proveedorId, propietarioId, prompt: peticion.prompt, modelo: peticion.modelo, conversacionId: idSeleccionado, guardarContenido: process.env.CAPI_NO_GUARDAR_RESPUESTAS !== "1" });
+    const identidad = identidadProceso();
+    const supervisor = new SupervisorEjecucionChat(this.repositorio, { id: ejecucionId, proyectoLocalId: proyecto.id, proveedor: proveedorId, propietarioId: identidad.propietarioId, pid: identidad.pid, hostname: identidad.hostname, bootId: identidad.bootId, modo: process.env.CAPI_TASK_CHILD ? "background" : "foreground", prompt: peticion.prompt, modelo: peticion.modelo, conversacionId: idSeleccionado, guardarContenido: process.env.CAPI_NO_GUARDAR_RESPUESTAS !== "1" });
     supervisor.iniciar();
     yield { tipo: "ejecucion", id: ejecucionId };
     supervisor.estado("preparando");
