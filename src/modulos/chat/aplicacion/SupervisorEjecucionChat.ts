@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { EventoStreaming } from "../../../nucleo/chat/EventoStreaming";
 import type { EstadoEjecucionChat } from "../../../plataforma/persistencia/RepositorioEjecucionesChat";
+import { RegistroEjecucionJsonl } from "../../../plataforma/logs/RegistroEjecucionJsonl";
 
 interface RepositorioSupervisor {
   crearEjecucionChat?(entrada:any, ahora?:number):void;
@@ -11,8 +12,8 @@ interface RepositorioSupervisor {
 interface EntradaSupervisor { id:string; proyectoLocalId:string; proveedor:string; propietarioId:string; prompt:string; modelo?:string; conversacionId?:string; guardarContenido?:boolean; pid?:number; hostname?:string; bootId?:string; modo?:"foreground"|"background"; comandoJson?:string; }
 
 export class SupervisorEjecucionChat {
-  private pensamiento=""; private respuesta=""; private conversacionId?:string; private modelo?:string;
-  constructor(private readonly repo:RepositorioSupervisor, private readonly entrada:EntradaSupervisor, private readonly ahora:()=>number=Date.now){ this.conversacionId=entrada.conversacionId; this.modelo=entrada.modelo; }
+  private pensamiento=""; private respuesta=""; private conversacionId?:string; private modelo?:string; private readonly log:RegistroEjecucionJsonl;
+  constructor(private readonly repo:RepositorioSupervisor, private readonly entrada:EntradaSupervisor, private readonly ahora:()=>number=Date.now){ this.conversacionId=entrada.conversacionId; this.modelo=entrada.modelo; this.log=new RegistroEjecucionJsonl(entrada.id); }
   iniciar():void { if(!this.repo.crearEjecucionChat) return; const t=this.ahora(); const existente=this.repo.obtenerEjecucionChat?.(this.entrada.id); if(existente){ this.repo.actualizarEjecucionChat?.(this.entrada.id,{estado:"reconectando",propietarioId:this.entrada.propietarioId,pid:this.entrada.pid,hostname:this.entrada.hostname,bootId:this.entrada.bootId,modo:this.entrada.modo??"foreground",cancelacionSolicitada:false,completadaEn:undefined,errorCodigo:undefined,errorDetalle:undefined},t); this.evento("ejecucion_reanudada",{proveedor:this.entrada.proveedor},t); return; } this.repo.crearEjecucionChat({id:this.entrada.id,proyectoLocalId:this.entrada.proyectoLocalId,proveedor:this.entrada.proveedor,modelo:this.modelo,conversacionId:this.conversacionId,estado:"creada",promptHash:createHash("sha256").update(this.entrada.prompt).digest("hex"),propietarioId:this.entrada.propietarioId,pid:this.entrada.pid,hostname:this.entrada.hostname,bootId:this.entrada.bootId,modo:this.entrada.modo??"foreground",comandoJson:this.entrada.comandoJson},t); this.evento("ejecucion_creada",{proveedor:this.entrada.proveedor}); }
   estado(estado:EstadoEjecucionChat,datos:Record<string,unknown>={}):void { const t=this.ahora(); this.repo.actualizarEjecucionChat?.(this.entrada.id,{estado,ultimoProgresoEn:t},t); this.evento("estado_cambiado",{estado,...datos},t); }
   registrar(e:EventoStreaming):void { const t=this.ahora(); const base:any={ultimoProgresoEn:t,ultimoSondeoEn:t};
@@ -30,5 +31,5 @@ export class SupervisorEjecucionChat {
   incrementarReintentos(codigo?:string):void { const a=this.repo.obtenerEjecucionChat?.(this.entrada.id); const t=this.ahora(); this.repo.actualizarEjecucionChat?.(this.entrada.id,{reintentos:(a?.reintentos??0)+1,errorCodigo:codigo},t); this.evento("reintento",{codigo},t); }
   verificarCancelacion():void { if(this.repo.obtenerEjecucionChat?.(this.entrada.id)?.cancelacionSolicitada){ const t=this.ahora(); this.repo.actualizarEjecucionChat?.(this.entrada.id,{estado:"cancelada",completadaEn:t},t); this.evento("ejecucion_cancelada",{},t); throw new Error("La ejecución fue cancelada por el usuario"); } }
   marcarFallo(error:unknown,codigo?:string):void { const t=this.ahora(); const mensaje=error instanceof Error?error.message:String(error); const codigoReal=codigo??(error&&typeof error==="object"&&"codigo" in error?String((error as any).codigo):undefined); const requiereUsuario=codigoReal==="LEASE_PERDIDO"; this.repo.actualizarEjecucionChat?.(this.entrada.id,{estado:requiereUsuario?"requiere_usuario":"fallida",completadaEn:t,errorCodigo:codigoReal,errorDetalle:mensaje},t); this.evento(requiereUsuario?"requiere_usuario":"ejecucion_fallida",{codigo:codigoReal,mensaje},t); }
-  private evento(tipo:string,datos:Record<string,unknown>,t=this.ahora()){ this.repo.anexarEventoEjecucion?.(this.entrada.id,tipo,datos,t); }
+  private evento(tipo:string,datos:Record<string,unknown>,t=this.ahora()){ this.repo.anexarEventoEjecucion?.(this.entrada.id,tipo,datos,t); this.log.escribir(tipo,datos,t); }
 }

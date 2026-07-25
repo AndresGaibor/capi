@@ -1,0 +1,3 @@
+import{defineCommand}from'citty';import{RegistroEjecucionJsonl}from'../../../../plataforma/logs/RegistroEjecucionJsonl';
+const dormir=(ms:number)=>new Promise(r=>setTimeout(r,ms));
+export const comandoTareasLogs=defineCommand({meta:{name:'logs',description:'Leer logs saneados de una ejecución'},args:{id:{type:'positional' as const,required:true},ultimas:{type:'string' as const},seguir:{type:'boolean' as const,default:false}},async run({args}){const log=new RegistroEjecucionJsonl(String(args.id));let anterior='';do{const actual=log.leer(args.ultimas?Number(args.ultimas):undefined);if(actual!==anterior){process.stdout.write(actual.slice(anterior.length));anterior=actual}if(!args.seguir)return;await dormir(1000)}while(true)}});

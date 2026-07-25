@@ -1,0 +1,2 @@
+import{defineCommand}from'citty';import{crearAplicacion}from'../../composicion/crearAplicacion';
+export const comandoTareasCompactar=defineCommand({meta:{name:'compactar',description:'Compactar heartbeats de una ejecución'},args:{id:{type:'positional' as const,required:true},conservar:{type:'string' as const,default:'10'}},run({args}){const a=crearAplicacion();try{const eliminados=a.repositorioContexto.compactarEjecucionChat(String(args.id),Number(args.conservar));process.stdout.write(JSON.stringify({ok:true,eliminados})+'\n')}finally{a.repositorioContexto.cerrar()}}});

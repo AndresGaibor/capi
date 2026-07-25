@@ -34,6 +34,10 @@ import { comandoTareasEstado } from "./comandos/tareas/estado";
 import { comandoTareasSeguir } from "./comandos/tareas/seguir";
 import { comandoTareasCancelar } from "./comandos/tareas/cancelar";
 import { comandoTareasReanudar } from "./comandos/tareas/reanudar";
+import { comandoTareasCompactar } from "./comandos/tareas/compactar";
+import { comandoTareasLimpiar } from "./comandos/tareas/limpiar";
+import { comandoTareasMetricas } from "./comandos/tareas/metricas";
+import { comandoTareasLogs } from "./comandos/tareas/logs";
 import { comandoDiagnosticoEjecucion } from "./comandos/diagnostico/ejecucion";
 import { comandoDiagnosticoRed } from "./comandos/diagnostico/red";
 import { validarArgumentosDesconocidos, mostrarErrorYHelp } from "./soporte/validar-args";
@@ -75,7 +79,7 @@ export const comandoPrincipal = defineCommand({
     sesion: defineCommand({ meta: { name: "sesion" }, subCommands: { importar: comandoSesionImportar } }),
     diagnostico: defineCommand({ meta: { name: "diagnostico" }, subCommands: { pagina: comandoDiagnosticoPagina, completo: comandoDiagnosticoCompleto, contratos: comandoDiagnosticoContratos, ejecucion: comandoDiagnosticoEjecucion, red: comandoDiagnosticoRed } }),
     servidor: defineCommand({ meta: { name: "servidor" }, subCommands: { iniciar: serveCommand } }),
-    tareas: defineCommand({ meta: { name: "tareas" }, subCommands: { listar: comandoTareasListar, estado: comandoTareasEstado, seguir: comandoTareasSeguir, cancelar: comandoTareasCancelar, reanudar: comandoTareasReanudar } }),
+    tareas: defineCommand({ meta: { name: "tareas" }, subCommands: { listar: comandoTareasListar, estado: comandoTareasEstado, seguir: comandoTareasSeguir, cancelar: comandoTareasCancelar, reanudar: comandoTareasReanudar, compactar: comandoTareasCompactar, limpiar: comandoTareasLimpiar, metricas: comandoTareasMetricas, logs: comandoTareasLogs } }),
   },
 });
 export function normalizarArgumentosCli(argumentos: string[]): string[] {
