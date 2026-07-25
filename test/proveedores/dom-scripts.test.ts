@@ -13,3 +13,7 @@ describe("scripts DOM",()=>{
  test("Qwen vacío",()=>{const e=ejecutar<any>(readFileSync("test/fixtures/qwen/respuesta-vacia.html","utf8"),scriptExtraerEstadoStreamingQwen());expect(e.response).toBe("");expect(e.think).toContain("completado")});
  test("DeepSeek normal",()=>{const e=ejecutar<any>(readFileSync("test/fixtures/deepseek/respuesta-normal.html","utf8"),scriptEstadoStreamingDeepSeek());expect(e.response).toBe("OK")});
 });
+
+test("Qwen extrae respuesta por estructura semántica sin clases históricas",()=>{const dom=new JSDOM(readFileSync("test/fixtures/qwen/respuesta-estructural.html","utf8"),{runScripts:"outside-only",url:"https://chat.qwen.ai/c/test"});dom.window.sessionStorage.setItem("__capiQwenPrompt","MARCADOR_ESTRUCTURAL");const e=dom.window.eval(scriptExtraerEstadoStreamingQwen()) as any;expect(e.response).toBe("RESPUESTA ESTRUCTURAL");expect(e.done).toBeTrue()});
+test("Qwen ignora un control Stop oculto",()=>{const e=ejecutar<any>(readFileSync("test/fixtures/qwen/stop-oculto.html","utf8"),scriptExtraerEstadoStreamingQwen());expect(e.response).toBe("OK OCULTO");expect(e.isGenerating).toBeFalse();expect(e.done).toBeTrue()});
+test("DeepSeek ignora clases response y stop irrelevantes",()=>{const e=ejecutar<any>(readFileSync("test/fixtures/deepseek/falsos-positivos.html","utf8"),scriptEstadoStreamingDeepSeek());expect(e.response).toBe("RESPUESTA REAL");expect(e.done).toBeTrue()});

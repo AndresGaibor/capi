@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { JSDOM } from "jsdom";
+import { scriptEnviarPromptDeepSeek } from "../../../src/proveedores/deepseek/scripts/enviarPrompt";
 import { resolverModeloDeepSeek, listarModelosDeepSeek } from "../../../src/proveedores/deepseek/modelos/ResolverModeloDeepSeek";
 import { convertirRegistroHistoria } from "../../../src/proveedores/deepseek/servicios/ConvertirRegistroHistoria";
 
@@ -84,4 +86,13 @@ test("DeepSeek genera scripts sintácticamente válidos durante streaming", asyn
   const eventos = [];
   for await (const evento of new DeepSeekStreaming(transporte, async () => {}).observar()) eventos.push(evento);
   expect(eventos.at(-1)).toEqual({ tipo: "fin" });
+});
+
+test("DeepSeek prepara prompt en editor contenteditable",()=>{
+  const dom=new JSDOM('<main><div role="textbox" contenteditable="true"></div><button aria-label="Send"></button></main>',{runScripts:"outside-only",url:"https://chat.deepseek.com/"});
+  dom.window.fetch=(async()=>new Response('')) as any;
+  Object.defineProperty(dom.window.HTMLElement.prototype,'getBoundingClientRect',{value(){return {width:20,height:20,left:0,top:0,right:20,bottom:20,x:0,y:0,toJSON(){}}}});
+  const resultado=dom.window.eval(scriptEnviarPromptDeepSeek("hola")) as any;
+  expect(resultado.ok).toBeTrue();
+  expect(dom.window.document.querySelector('[contenteditable]')?.textContent).toBe("hola");
 });

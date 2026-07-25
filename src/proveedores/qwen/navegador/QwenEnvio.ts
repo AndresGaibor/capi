@@ -209,7 +209,7 @@ export class QwenEnvio implements EstrategiaAdjuntos {
         vacio: boolean;
         conversacionNueva: boolean;
       }>(
-        `(() => { const ta=document.querySelector(${JSON.stringify(SELECTORES_QWEN.textarea)}); return {vacio:!ta||ta.value.trim()==='',conversacionNueva:location.pathname.startsWith('/c/')&&location.pathname!==${JSON.stringify(rutaInicial)}}; })()`,
+        `(() => { const entrada=document.querySelector(${JSON.stringify(SELECTORES_QWEN.textarea)}); const valor=entrada ? ('value' in entrada ? String(entrada.value||'') : String(entrada.textContent||'')) : ''; return {vacio:!entrada||valor.trim()==='',conversacionNueva:location.pathname.startsWith('/c/')&&location.pathname!==${JSON.stringify(rutaInicial)}}; })()`,
       );
       if (estado.value?.vacio || estado.value?.conversacionNueva) return;
       await this.pausa(100);

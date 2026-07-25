@@ -4,6 +4,7 @@ import { ErrorPaginaProveedor } from "../../../nucleo/errores/ErroresAplicacion"
 import type { TransporteNavegador } from "../../../plataforma/webbridge/TransporteNavegador";
 import type { OpcionesDeepSeek } from "../tipos";
 import { scriptEnviarPromptDeepSeek } from "../scripts/enviarPrompt";
+import { SELECTORES_DEEPSEEK } from "../selectores/SelectoresDeepSeek";
 import type { EstrategiaAdjuntos, ResultadoAdjuntos } from "../../../nucleo/archivos/EstrategiaAdjuntos";
 import { detectarTipoArchivo } from "../../../nucleo/archivos/DetectarTipoArchivo";
 
@@ -121,13 +122,14 @@ export class DeepSeekEnvio implements EstrategiaAdjuntos {
     })()`);
     for (let intento = 0; intento < 80; intento++) {
       const estado = await this.transporte.evaluar<{vacio:boolean;conversacionNueva:boolean}>(`(() => {
-        const textarea = document.querySelector('textarea[name="search"]');
-        return { vacio: !textarea || textarea.value.trim() === '', conversacionNueva: location.pathname.includes('/a/chat/s/') && location.pathname !== ${JSON.stringify(rutaInicial)} };
+        const entrada = document.querySelector(${JSON.stringify(SELECTORES_DEEPSEEK.textarea)});
+        const valor = entrada ? ('value' in entrada ? String(entrada.value || '') : String(entrada.textContent || '')) : '';
+        return { vacio: !entrada || valor.trim() === '', conversacionNueva: location.pathname.includes('/a/chat/s/') && location.pathname !== ${JSON.stringify(rutaInicial)} };
       })()`);
       if (estado.value?.vacio || estado.value?.conversacionNueva) return;
       if (intento === 20) {
         await this.transporte.evaluar(`(() => {
-          const textarea = document.querySelector('textarea[name="search"]');
+          const textarea = document.querySelector(${JSON.stringify(SELECTORES_DEEPSEEK.textarea)});
           textarea?.focus();
           textarea?.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',code:'Enter',bubbles:true,cancelable:true}));
           textarea?.dispatchEvent(new KeyboardEvent('keyup',{key:'Enter',code:'Enter',bubbles:true,cancelable:true}));

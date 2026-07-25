@@ -1,8 +1,10 @@
 import { SELECTORES_DEEPSEEK } from "../selectores/SelectoresDeepSeek";
+import { scriptUtilidadesDom } from "../../compartido/scripts/utilidadesDom";
 
 export function scriptEnviarPromptDeepSeek(prompt: string): string {
   return `(() => {
-    if (!window.__capiDeepSeekFetchOriginal) {
+    ${scriptUtilidadesDom()}
+    if (!window.__capiDeepSeekFetchOriginal && typeof window.fetch === 'function') {
       window.__capiDeepSeekFetchOriginal = window.fetch.bind(window);
       window.fetch = async (...args) => {
         const respuesta = await window.__capiDeepSeekFetchOriginal(...args);
@@ -27,30 +29,26 @@ export function scriptEnviarPromptDeepSeek(prompt: string): string {
       };
     }
     window.__capiDeepSeekCompletion = { raw:'', done:false, error:'' };
-    const ta = document.querySelector(${JSON.stringify(SELECTORES_DEEPSEEK.textarea)});
-    if (!ta) return { ok: false, error: 'Textarea no encontrado' };
-    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set;
-    setter.call(ta, ${JSON.stringify(prompt)});
-    ta.dispatchEvent(new Event('input', { bubbles: true }));
-    ta.dispatchEvent(new Event('change', { bubbles: true }));
-
-    const compositor = ta.closest('form') || ta.parentElement?.parentElement?.parentElement || document;
-    const visibles = [...compositor.querySelectorAll(${JSON.stringify(SELECTORES_DEEPSEEK.enviar)})]
-      .filter(elemento => {
-        const rect = elemento.getBoundingClientRect();
-        const estilo = getComputedStyle(elemento);
-        return rect.width > 0 && rect.height > 0 && estilo.display !== 'none' && estilo.visibility !== 'hidden';
-      });
-    const centro = ta.getBoundingClientRect();
-    const btn = visibles.sort((a, b) => {
-      const ar = a.getBoundingClientRect(); const br = b.getBoundingClientRect();
-      const ad = Math.abs(ar.left - centro.right) + Math.abs(ar.top - centro.bottom);
-      const bd = Math.abs(br.left - centro.right) + Math.abs(br.top - centro.bottom);
-      return ad - bd;
-    })[0];
-    if (!btn) return { ok: false, error: 'Botón de envío visible no encontrado' };
-    const rect = btn.getBoundingClientRect();
-    return { ok: true, x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
-
+    const entrada = __capiDom.primeroVisible(${JSON.stringify(SELECTORES_DEEPSEEK.entrada)}, document)
+      || document.querySelector(${JSON.stringify(SELECTORES_DEEPSEEK.textarea)});
+    if (!(entrada instanceof HTMLElement)) return { ok:false, error:'Entrada de DeepSeek no encontrada; estrategias: name, placeholder, contenteditable, textarea' };
+    entrada.focus();
+    if (entrada instanceof HTMLTextAreaElement || entrada instanceof HTMLInputElement) {
+      const proto = entrada instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+      const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+      if (!setter) return { ok:false, error:'Setter de entrada no disponible' };
+      setter.call(entrada, ${JSON.stringify(prompt)});
+    } else if (entrada.isContentEditable || entrada.getAttribute('contenteditable') === 'true') {
+      entrada.textContent = ${JSON.stringify(prompt)};
+    } else return { ok:false, error:'Tipo de entrada de DeepSeek no soportado' };
+    entrada.dispatchEvent(new InputEvent('input', { bubbles:true, inputType:'insertText', data:${JSON.stringify(prompt)} }));
+    entrada.dispatchEvent(new Event('change', { bubbles:true }));
+    const compositor = entrada.closest('form') || entrada.parentElement?.parentElement?.parentElement || document;
+    const candidatos = __capiDom.visibles(${JSON.stringify(SELECTORES_DEEPSEEK.enviarCandidatos)}, compositor)
+      .filter(b => !b.disabled && b.getAttribute('aria-disabled') !== 'true');
+    const btn = __capiDom.masCercano(entrada, candidatos);
+    if (!(btn instanceof HTMLElement)) return { ok:false, error:'Botón de envío visible no encontrado; candidatos:'+candidatos.length };
+    const rect=btn.getBoundingClientRect();
+    return { ok:true, x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
   })()`;
 }
