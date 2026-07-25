@@ -1,4 +1,11 @@
 import { CAPI_CONFIG } from "../../configuracion/ConstantesCapi";
+export interface RegistroRedSaneado { url:string; method?:string; status?:number; requestHeaders?:Record<string,string>; responseHeaders?:Record<string,string>; }
+export function sanearRegistroRed(entrada:any):RegistroRedSaneado {
+  const sanearUrl=(valor:string)=>{ try{const u=new URL(valor); for(const k of [...u.searchParams.keys()]) if(/token|key|auth|session|cookie/i.test(k)) u.searchParams.set(k,"[REDACTADO]"); return u.toString();}catch{return String(valor||"").replace(/(token|key|auth|session)=([^&]+)/gi,"$1=[REDACTADO]");}};
+  const headers=(h:any)=>Object.fromEntries(Object.entries(h??{}).filter(([k])=>!/authorization|cookie|set-cookie|token|api-key/i.test(k)).map(([k,v])=>[k,String(v).slice(0,500)]));
+  return {url:sanearUrl(String(entrada?.url??"")),method:entrada?.method,status:typeof entrada?.status==="number"?entrada.status:undefined,requestHeaders:headers(entrada?.requestHeaders),responseHeaders:headers(entrada?.responseHeaders)};
+}
+
 const SESION = process.env.CAPI_WEBBRIDGE_SESSION?.trim() || "capi-capture";
 type FetchLike = typeof fetch;
 export class ClienteWebBridge {
@@ -31,6 +38,12 @@ export class ClienteWebBridge {
     await this.comando("find_tab", { url: pestaña.url, active: false });
     return true;
   }
+
+  async listarPestanas():Promise<Array<{url?:string;title?:string;active?:boolean}>> { const r=await this.comando<{tabs?:Array<{url?:string;title?:string;active?:boolean}>}>("list_tabs"); return r.tabs??[]; }
+  async recuperarPestana(host:string,url?:string):Promise<boolean> { try { const tabs=await this.listarPestanas(); const encontrada=tabs.find(t=>t.url?.includes(host)); if(encontrada?.url){ await this.comando("find_tab",{url:encontrada.url,active:false}); return true; } if(url){ await this.comando("navigate",{url,newTab:true,group_title:"Recuperación CAPI"}); return true; } return false; } catch { return false; } }
+  async red(cmd:"start"|"stop"|"list"|"detail",opciones:Record<string,unknown>={}):Promise<unknown> { return this.comando("network",{cmd,...opciones}); }
+  async listarRedSaneada():Promise<RegistroRedSaneado[]> { const r:any=await this.red("list"); const registros=Array.isArray(r)?r:(r?.requests??r?.entries??[]); return registros.map(sanearRegistroRed); }
+
   async subirArchivos(selector: string, archivos: string[]): Promise<void> {
     await this.comando("upload", { selector, files: archivos });
   }

@@ -10,6 +10,8 @@ import { ControlEjecucionChat } from "./ControlEjecucionChat";
 import { RegistroChatHistorial } from "./RegistroChatHistorial";
 import { prepararContextoChat, obtenerGit } from "./PrepararContextoChat";
 import { EjecutarIntentosChat } from "./EjecutarIntentosChat";
+import { SupervisorEjecucionChat } from "./SupervisorEjecucionChat";
+import { createHash } from "node:crypto";
 
 export class EnviarMensajeConContexto {
   private readonly control: ControlEjecucionChat;
@@ -38,6 +40,12 @@ export class EnviarMensajeConContexto {
       ? undefined
       : seleccion.conversacionId;
     const cwd = peticion.contexto?.cwd ?? proyecto.rutaRaiz ?? process.cwd();
+    const ejecucionId = process.env.CAPI_TASK_ID || crypto.randomUUID();
+    const propietarioId = `${process.pid}-${crypto.randomUUID()}`;
+    const supervisor = new SupervisorEjecucionChat(this.repositorio, { id: ejecucionId, proyectoLocalId: proyecto.id, proveedor: proveedorId, propietarioId, prompt: peticion.prompt, modelo: peticion.modelo, conversacionId: idSeleccionado, guardarContenido: process.env.CAPI_NO_GUARDAR_RESPUESTAS !== "1" });
+    supervisor.iniciar();
+    yield { tipo: "ejecucion", id: ejecucionId };
+    supervisor.estado("preparando");
 
     const preparado = await prepararContextoChat(
       peticion,
@@ -74,6 +82,13 @@ export class EnviarMensajeConContexto {
       ...(paquete?.archivos?.map((a) => a.ruta) ?? fuentes),
       ...adjuntosNativos,
     ];
+    const huellaEnvio = createHash("sha256").update(JSON.stringify({ ejecucionId, proveedorId, conversacionId:idSeleccionado??null, prompt:peticion.prompt, archivos:[...archivosFinales].sort() })).digest("hex");
+    const envioExistente = this.repositorio.obtenerEnvioIdempotente?.(huellaEnvio);
+    if (envioExistente && !peticion.soloPoll && this.repositorio.debeEvitarReenvio?.(huellaEnvio)) {
+      const error=new Error("El estado del envío anterior es incierto o ya fue confirmado. Usa --continuar para observar sin reenviar.");
+      Object.assign(error,{codigo:"ENVIO_INCIERTO"}); supervisor.marcarFallo(error,"ENVIO_INCIERTO"); throw error;
+    }
+    if (!envioExistente && !peticion.soloPoll) this.repositorio.registrarEnvioIdempotente?.({huella:huellaEnvio,proveedor:proveedorId,conversacionId:idSeleccionado,promptHash:createHash("sha256").update(peticion.prompt).digest("hex"),archivosHash:createHash("sha256").update([...archivosFinales].sort().join("\n")).digest("hex"),estado:"preparado"});
 
     let idFinal = idSeleccionado;
     const controlResultado = this.control.iniciar({
@@ -122,8 +137,10 @@ export class EnviarMensajeConContexto {
     let completado = false;
     let pausado = false;
     let pensamiento = "";
+    let envioConfirmado = Boolean(envioExistente && /^confirmado_/.test(envioExistente.estado));
 
     try {
+      if (!peticion.soloPoll && !envioConfirmado) this.repositorio.actualizarEnvioIdempotente?.(huellaEnvio,"intentando_enviar");
       const intentos = this.construirIntentos(
         proveedorId,
         peticion,
@@ -133,8 +150,12 @@ export class EnviarMensajeConContexto {
       const intentosChat = new EjecutarIntentosChat();
       try {
         for await (const evento of intentosChat.ejecutar(proveedor, peticionPreparada, intentos, idFinal, candidatas.length)) {
+          this.control.verificarLease();
+          supervisor.verificarCancelacion();
           if (evento.tipo === "pausado") pausado = true;
           if (evento.tipo === "pensamiento") pensamiento += evento.contenido;
+          supervisor.registrar(evento);
+          if (!envioConfirmado && ["pensamiento","respuesta","conversacion"].includes(evento.tipo)) { envioConfirmado=true; this.repositorio.actualizarEnvioIdempotente?.(huellaEnvio,"confirmado_dom"); }
           yield evento;
         }
       } catch (error) {
@@ -142,8 +163,12 @@ export class EnviarMensajeConContexto {
         this.repositorio.marcarSaludConversacion?.(idFinal, proveedorId, "eliminada_remotamente", "CONVERSACION_INVALIDA");
         const recuperacion = new EjecutarIntentosChat();
         for await (const evento of recuperacion.ejecutar(proveedor, { ...peticionPreparada, nuevaPestana: true }, intentos.slice(0, 1), undefined, candidatas.length)) {
+          this.control.verificarLease();
+          supervisor.verificarCancelacion();
           if (evento.tipo === "pausado") pausado = true;
           if (evento.tipo === "pensamiento") pensamiento += evento.contenido;
+          supervisor.registrar(evento);
+          if (!envioConfirmado && ["pensamiento","respuesta","conversacion"].includes(evento.tipo)) { envioConfirmado=true; this.repositorio.actualizarEnvioIdempotente?.(huellaEnvio,"confirmado_dom"); }
           yield evento;
         }
         intentosChat.respuesta = recuperacion.respuesta;
@@ -175,6 +200,8 @@ export class EnviarMensajeConContexto {
       }
     } catch (error) {
       errorFinal = error;
+      if (!peticion.soloPoll && !envioConfirmado) this.repositorio.actualizarEnvioIdempotente?.(huellaEnvio,"desconocido");
+      supervisor.marcarFallo(error);
       throw error;
     } finally {
       this.control.liberar();

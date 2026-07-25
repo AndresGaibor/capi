@@ -55,3 +55,15 @@ test("ProveedorQwen emite conversación apenas aparece tras enviar", async () =>
   const eventos = await recoger(new ProveedorQwen(pagina as any).enviarMensaje({ prompt: "hola" }));
   expect(eventos.find((e) => e.tipo === "conversacion")?.id).toBe("chat-tardio");
 });
+
+test("Qwen sobrevive veinte fallos, recupera pestaña y continúa", async () => {
+  let intentos=0, recuperaciones=0;
+  const transporte={
+    async evaluar<T>(){ if(++intentos<=20) throw new Error("pestaña recargada"); return {value:{think:"",response:"RECUPERADA",done:true,isGenerating:false,isAssistant:true,isError:false,errorMessage:""} as T}; },
+    async recuperarPestana(){ recuperaciones++; return true; },
+  };
+  const eventos=await recoger(new QwenStreaming(transporte as any,async()=>{},(()=>{let t=0;return()=>t+=2_000;})()).observar());
+  expect(recuperaciones).toBeGreaterThan(0);
+  expect(eventos.find(e=>e.tipo==="respuesta")?.contenido).toBe("RECUPERADA");
+  expect(eventos.some(e=>e.tipo==="pausado")).toBeFalse();
+});

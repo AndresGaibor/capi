@@ -14,6 +14,8 @@ import { RepositorioPreferencias } from "./RepositorioPreferencias";
 import { RepositorioHistorial } from "./RepositorioHistorial";
 import { RepositorioCache } from "./RepositorioCache";
 import { RepositorioCheckpointsChat, type CheckpointChat } from "./RepositorioCheckpointsChat";
+import { RepositorioEjecucionesChat, type EjecucionChatDurable } from "./RepositorioEjecucionesChat";
+import { RepositorioEnviosIdempotentes, type EnvioIdempotente, type EstadoEnvioIdempotente } from "./RepositorioEnviosIdempotentes";
 
 export { type ConversacionRegistrada } from "./RepositorioConversaciones";
 
@@ -26,6 +28,8 @@ export class RepositorioContextoSqlite {
   readonly historial: RepositorioHistorial;
   readonly cache: RepositorioCache;
   readonly checkpoints: RepositorioCheckpointsChat;
+  readonly ejecucionesChat: RepositorioEjecucionesChat;
+  readonly enviosIdempotentes: RepositorioEnviosIdempotentes;
 
   private readonly db: Database;
 
@@ -43,6 +47,8 @@ export class RepositorioContextoSqlite {
     this.historial = new RepositorioHistorial(this.db);
     this.cache = new RepositorioCache(this.db);
     this.checkpoints = new RepositorioCheckpointsChat(this.db);
+    this.ejecucionesChat = new RepositorioEjecucionesChat(this.db);
+    this.enviosIdempotentes = new RepositorioEnviosIdempotentes(this.db);
   }
 
   registrarProyecto(
@@ -318,6 +324,20 @@ export class RepositorioContextoSqlite {
       conversacionId,
     );
   }
+
+  registrarEnvioIdempotente(entrada:Omit<EnvioIdempotente,"creadoEn"|"actualizadoEn">,ahora=Date.now()){this.enviosIdempotentes.registrar(entrada,ahora);}
+  actualizarEnvioIdempotente(huella:string,estado:EstadoEnvioIdempotente,ahora=Date.now()){this.enviosIdempotentes.actualizar(huella,estado,ahora);}
+  obtenerEnvioIdempotente(huella:string){return this.enviosIdempotentes.obtener(huella);}
+  debeEvitarReenvio(huella:string){return this.enviosIdempotentes.debeEvitarReenvio(huella);}
+
+  crearEjecucionChat(entrada: Parameters<RepositorioEjecucionesChat["crear"]>[0], ahora=Date.now()): void { this.ejecucionesChat.crear(entrada, ahora); }
+  actualizarEjecucionChat(id:string, cambios:Partial<EjecucionChatDurable>, ahora=Date.now()): void { this.ejecucionesChat.actualizar(id,cambios,ahora); }
+  obtenerEjecucionChat(id:string): EjecucionChatDurable|null { return this.ejecucionesChat.obtener(id); }
+  listarEjecucionesChat(limite=100): EjecucionChatDurable[] { return this.ejecucionesChat.listar(limite); }
+  anexarEventoEjecucion(id:string,tipo:string,datos:Record<string,unknown>,ahora=Date.now()){ return this.ejecucionesChat.anexarEvento(id,tipo,datos,ahora); }
+  listarEventosEjecucion(id:string,desde=0){ return this.ejecucionesChat.listarEventos(id,desde); }
+  solicitarCancelacionEjecucion(id:string,ahora=Date.now()){ this.ejecucionesChat.solicitarCancelacion(id,ahora); }
+  marcarEjecucionReanudable(id:string,ahora=Date.now()){ this.ejecucionesChat.marcarReanudable(id,ahora); }
 
   obtenerMetricasProyecto(proyectoLocalId: string): any {
     return this.cache.obtenerMetricas(proyectoLocalId);

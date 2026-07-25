@@ -1,8 +1,3 @@
 import { defineCommand } from "citty";
-import { listarTareas } from "../../soporte/tareas";
-
-export const comandoTareasListar = defineCommand({
-  meta: { name: "listar", description: "Listar tareas ChatGPT en segundo plano" },
-  args: {},
-  run: () => { process.stdout.write(`${JSON.stringify(listarTareas())}\n`); },
-});
+import { listarEjecuciones } from "./durable";
+export const comandoTareasListar=defineCommand({meta:{name:"listar",description:"Listar ejecuciones de chat durables"},args:{limite:{type:"string" as const,default:"100"}},run:({args})=>process.stdout.write(JSON.stringify(listarEjecuciones(Number(args.limite)))+"\n")});

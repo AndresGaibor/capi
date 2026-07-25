@@ -8,6 +8,7 @@ export class ControlEjecucionChat {
   private _procesoId?: string;
   private _proveedorId?: string;
   private _conversacionIdOcupada?: string;
+  private leasePerdido = false;
 
   constructor(
     private readonly repositorio: {
@@ -103,6 +104,17 @@ export class ControlEjecucionChat {
     return { procesoId: this._procesoId!, ocupacionFallida };
   }
 
+  renovarAhora(ttlMs:number): boolean {
+    if (!this._procesoId) return false;
+    const ahora=Date.now();
+    const ejecucionOk=this.repositorio.renovarEjecucion(this._procesoId,ahora,ttlMs);
+    const ocupacionOk=!this._conversacionIdOcupada||!this._proveedorId||this.repositorio.renovarOcupacion(this._conversacionIdOcupada,this._procesoId,ahora,ttlMs,this._proveedorId);
+    if(!ejecucionOk||!ocupacionOk) this.leasePerdido=true;
+    return ejecucionOk&&ocupacionOk;
+  }
+
+  verificarLease(): void { if(this.leasePerdido){ const e=new Error("Se perdió el lease de la ejecución; CAPI no reenviará el prompt"); Object.assign(e,{codigo:"LEASE_PERDIDO"}); throw e; } }
+
   liberar(): void {
     if (this.intervalId) {
       clearInterval(this.intervalId);
@@ -121,28 +133,18 @@ export class ControlEjecucionChat {
       this._procesoId = undefined;
     }
     this._proveedorId = undefined;
+    this.leasePerdido = false;
   }
 
   private programarRenovacionEjecucion(ttlMs: number): void {
     this.intervalId = setInterval(() => {
-      if (this._procesoId)
-        this.repositorio.renovarEjecucion(this._procesoId, Date.now(), ttlMs);
+      this.renovarAhora(ttlMs);
     }, 30_000);
   }
 
   private programarRenovacionCompleta(ttlMs: number): void {
     this.intervalId = setInterval(() => {
-      if (!this._procesoId) return;
-      this.repositorio.renovarEjecucion(this._procesoId, Date.now(), ttlMs);
-      if (this._conversacionIdOcupada && this._proveedorId) {
-        this.repositorio.renovarOcupacion(
-          this._conversacionIdOcupada,
-          this._procesoId,
-          Date.now(),
-          ttlMs,
-          this._proveedorId,
-        );
-      }
+      this.renovarAhora(ttlMs);
     }, 30_000);
   }
 }

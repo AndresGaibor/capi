@@ -1,0 +1,24 @@
+import type { Database } from "bun:sqlite";
+
+export type EstadoEjecucionChat = "creada"|"preparando"|"enviando"|"enviado"|"pensando"|"esperando_respuesta"|"respondiendo"|"estabilizando"|"completada"|"reconectando"|"estancada"|"requiere_usuario"|"cancelada"|"fallida";
+export interface EjecucionChatDurable { id:string; proyectoLocalId:string; proveedor:string; modelo?:string; conversacionId?:string; estado:EstadoEjecucionChat; promptHash?:string; respuestaParcial:string; pensamientoParcial:string; estrategia?:string; propietarioId:string; ultimoProgresoEn:number; ultimoSondeoEn?:number; creadaEn:number; actualizadaEn:number; completadaEn?:number; errorCodigo?:string; errorDetalle?:string; cancelacionSolicitada:boolean; reintentos:number; }
+export interface EventoEjecucionChat { ejecucionId:string; secuencia:number; tipo:string; datos:Record<string,unknown>; creadoEn:number; }
+
+const mapear = (r:any): EjecucionChatDurable => ({ id:r.id, proyectoLocalId:r.proyecto_local_id, proveedor:r.proveedor, modelo:r.modelo??undefined, conversacionId:r.conversacion_id??undefined, estado:r.estado, promptHash:r.prompt_hash??undefined, respuestaParcial:r.respuesta_parcial??"", pensamientoParcial:r.pensamiento_parcial??"", estrategia:r.estrategia??undefined, propietarioId:r.propietario_id, ultimoProgresoEn:r.ultimo_progreso_en, ultimoSondeoEn:r.ultimo_sondeo_en??undefined, creadaEn:r.creada_en, actualizadaEn:r.actualizada_en, completadaEn:r.completada_en??undefined, errorCodigo:r.error_codigo??undefined, errorDetalle:r.error_detalle??undefined, cancelacionSolicitada:!!r.cancelacion_solicitada, reintentos:r.reintentos??0 });
+
+export class RepositorioEjecucionesChat {
+  constructor(private readonly db: Database) {}
+  crear(e: Omit<EjecucionChatDurable,"respuestaParcial"|"pensamientoParcial"|"ultimoProgresoEn"|"creadaEn"|"actualizadaEn"|"cancelacionSolicitada"|"reintentos"> & Partial<Pick<EjecucionChatDurable,"respuestaParcial"|"pensamientoParcial">>, ahora=Date.now()): void {
+    this.db.query(`INSERT INTO ejecuciones_chat_activas(id,proyecto_local_id,proveedor,modelo,conversacion_id,estado,prompt_hash,respuesta_parcial,pensamiento_parcial,estrategia,propietario_id,ultimo_progreso_en,creada_en,actualizada_en,cancelacion_solicitada,reintentos) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,0)`).run(e.id,e.proyectoLocalId,e.proveedor,e.modelo??null,e.conversacionId??null,e.estado,e.promptHash??null,e.respuestaParcial??"",e.pensamientoParcial??"",e.estrategia??null,e.propietarioId,ahora,ahora,ahora);
+  }
+  actualizar(id:string,c:Partial<EjecucionChatDurable>,ahora=Date.now()): void {
+    const actual=this.obtener(id); if(!actual) return; const n={...actual,...c,actualizadaEn:ahora};
+    this.db.query(`UPDATE ejecuciones_chat_activas SET modelo=?,conversacion_id=?,estado=?,respuesta_parcial=?,pensamiento_parcial=?,estrategia=?,propietario_id=?,ultimo_progreso_en=?,ultimo_sondeo_en=?,actualizada_en=?,completada_en=?,error_codigo=?,error_detalle=?,cancelacion_solicitada=?,reintentos=? WHERE id=?`).run(n.modelo??null,n.conversacionId??null,n.estado,n.respuestaParcial,n.pensamientoParcial,n.estrategia??null,n.propietarioId,n.ultimoProgresoEn,n.ultimoSondeoEn??null,ahora,n.completadaEn??null,n.errorCodigo??null,n.errorDetalle??null,n.cancelacionSolicitada?1:0,n.reintentos,id);
+  }
+  obtener(id:string):EjecucionChatDurable|null { const r=this.db.query("SELECT * FROM ejecuciones_chat_activas WHERE id=?").get(id); return r?mapear(r):null; }
+  listar(limite=100):EjecucionChatDurable[]{ return (this.db.query("SELECT * FROM ejecuciones_chat_activas ORDER BY creada_en DESC LIMIT ?").all(limite) as any[]).map(mapear); }
+  anexarEvento(id:string,tipo:string,datos:Record<string,unknown>,ahora=Date.now()):EventoEjecucionChat { return this.db.transaction(()=>{ const s=Number((this.db.query("SELECT COALESCE(MAX(secuencia),0)+1 AS s FROM eventos_ejecucion_chat WHERE ejecucion_id=?").get(id) as any).s); this.db.query("INSERT INTO eventos_ejecucion_chat(ejecucion_id,secuencia,tipo,datos_json,creado_en) VALUES(?,?,?,?,?)").run(id,s,tipo,JSON.stringify(datos),ahora); return {ejecucionId:id,secuencia:s,tipo,datos,creadoEn:ahora}; })(); }
+  listarEventos(id:string,desde=0):EventoEjecucionChat[]{ return (this.db.query("SELECT * FROM eventos_ejecucion_chat WHERE ejecucion_id=? AND secuencia>? ORDER BY secuencia").all(id,desde) as any[]).map(r=>({ejecucionId:r.ejecucion_id,secuencia:r.secuencia,tipo:r.tipo,datos:JSON.parse(r.datos_json),creadoEn:r.creado_en})); }
+  solicitarCancelacion(id:string,ahora=Date.now()){ this.actualizar(id,{cancelacionSolicitada:true},ahora); this.anexarEvento(id,"cancelacion_solicitada",{},ahora); }
+  marcarReanudable(id:string,ahora=Date.now()){ this.actualizar(id,{estado:"reconectando",cancelacionSolicitada:false,errorCodigo:undefined,errorDetalle:undefined},ahora); this.anexarEvento(id,"reanudacion_solicitada",{},ahora); }
+}

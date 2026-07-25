@@ -1,0 +1,25 @@
+# Supervisor durable de CAPI
+
+CAPI persiste ejecuciones de chat, eventos, heartbeats, idempotencia y cancelaciones en SQLite. Una ejecución puede retomarse sin reenviar el prompt.
+
+## Comandos
+
+```bash
+capi tareas listar
+capi tareas estado ID
+capi tareas seguir ID --esperar
+capi tareas cancelar ID
+capi tareas reanudar ID
+capi diagnostico ejecucion ID
+capi diagnostico red iniciar
+capi diagnostico red listar
+capi diagnostico red detener
+```
+
+## Privacidad
+
+Use `CAPI_NO_GUARDAR_RESPUESTAS=1` para persistir solo estados, hashes y métricas. La captura de red elimina autorización, cookies, tokens, API keys y cuerpos privados.
+
+## Tampermonkey opcional
+
+`scripts/tampermonkey/capi-qwen-observador.user.js` publica únicamente estado, heartbeat y conteo de mutaciones en `window.__CAPI_QWEN_BRIDGE__`. No controla envíos y no es requisito para CAPI.

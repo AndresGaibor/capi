@@ -106,3 +106,12 @@ describe("ControlEjecucionChat", () => {
     expect(mockRepo.adquirirEjecucion).toHaveBeenCalledWith(expect.any(String), expect.any(Number), 60_000, expect.any(Number), 5);
   });
 });
+
+test("detecta pérdida de lease durante renovación", () => {
+  const repo:any={adquirirEjecucion:()=>true,adquirirOcupacion:()=>true,renovarEjecucion:()=>true,renovarOcupacion:()=>false,liberarEjecucion:()=>{},liberarOcupacion:()=>{}};
+  const control=new ControlEjecucionChat(repo);
+  control.iniciar({proyectoId:"p",proveedorId:"qwen",conversacionId:"c"},{ttlMs:90_000});
+  expect(control.renovarAhora(90_000)).toBeFalse();
+  expect(()=>control.verificarLease()).toThrow("lease");
+  control.liberar();
+});

@@ -10,6 +10,9 @@ export class RenderizadorStreaming {
       return;
     }
 
+    if (evento.tipo === "ejecucion") { consola.info(`Ejecución durable: ${evento.id}`); return; }
+    if (evento.tipo === "estado") { if(evento.estado==="desconectado"||evento.estado==="estancado") consola.warn(`Estado del proveedor: ${evento.estado}${evento.detalles?` (${evento.detalles})`:""}`); return; }
+
     if (evento.tipo === "modelo") {
       consola.info(`Modelo activo: ${evento.nombre}`);
       return;

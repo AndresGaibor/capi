@@ -2,6 +2,7 @@ import { ErrorPaginaProveedor } from "../../../nucleo/errores/ErroresAplicacion"
 import type { TransporteNavegador } from "../../../plataforma/webbridge/TransporteNavegador";
 import { scriptPrepararEnvioQwen } from "../scripts/enviarPrompt";
 import { SELECTORES_QWEN } from "../selectores/SelectoresQwen";
+import { EscritorEditorWeb } from "../../compartido/EscritorEditorWeb";
 
 export class QwenControlEnvio {
   constructor(
@@ -11,6 +12,7 @@ export class QwenControlEnvio {
   ) {}
 
   async enviar(prompt: string): Promise<void> {
+    if (this.transporte.rellenar) await new EscritorEditorWeb(this.transporte).escribir(SELECTORES_QWEN.textarea, prompt);
     const rutaInicial = (await this.transporte.evaluar<string>("location.pathname")).value ?? "";
     const resultado = await this.transporte.evaluar<{ ok: boolean; error?: string; x?: number; y?: number }>(scriptPrepararEnvioQwen(prompt));
     if (!resultado.value?.ok) throw new ErrorPaginaProveedor(resultado.value?.error ?? "No se pudo preparar el prompt de Qwen");

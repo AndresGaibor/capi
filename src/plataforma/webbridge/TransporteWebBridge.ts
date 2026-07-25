@@ -12,5 +12,8 @@ export class TransporteWebBridge implements TransporteNavegador {
   evaluar<T>(codigo: string) { return this.cliente.evaluar<T>(codigo); }
   snapshotAccesibilidad() { return this.cliente.snapshotAccesibilidad(); }
   cdp<T>(method: string, params?: Record<string, unknown>) { return this.cliente.cdp<T>(method, params); }
+  recuperarPestana(host:string,url?:string){ return this.cliente.recuperarPestana(host,url); }
+  red(cmd:"start"|"stop"|"list"|"detail",opciones:Record<string,unknown>={}){ return this.cliente.red(cmd,opciones); }
+  listarRedSaneada(){ return this.cliente.listarRedSaneada(); }
   cerrarSesion() { return this.cliente.cerrarSesion(); }
 }

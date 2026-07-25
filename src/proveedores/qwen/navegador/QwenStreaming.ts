@@ -3,10 +3,11 @@ import type { EventoStreaming } from "../../../nucleo/chat/EventoStreaming";
 import type { TransporteNavegador } from "../../../plataforma/webbridge/TransporteNavegador";
 import { scriptExtraerEstadoStreamingQwen } from "../scripts/extraerEstadoStreaming";
 import { extraerRespuestaSnapshotQwen } from "./ExtraerRespuestaSnapshotQwen";
+import { configuracionProveedor } from "../../../configuracion/ConfiguracionProveedores";
 
 const dormir = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const normalizar = (texto: string) => texto.replace(/\u200B/g, "").replace(/\r\n/g, "\n").replace(/[ \t]+\n/g, "\n").trim();
-const INTERVALO_RESCATE_SNAPSHOT = 30_000;
+const CONFIG_QWEN = configuracionProveedor("qwen");
 
 interface EstadoQwen {
   think: string;
@@ -30,26 +31,30 @@ export class QwenStreaming {
     let ultimoPensamiento = "", ultimaRespuesta = "", observada = "";
     let ultimoCambio = this.ahora();
     let ultimoRescateSnapshot = 0;
-    const inicio = this.ahora();
     let respondiendo = false;
+    let fallosConsecutivos = 0;
+    let ultimoHeartbeat = 0;
+    let urlRecuperacion: string | undefined;
 
     while (true) {
-      await this.pausa(CAPI_CONFIG.TIMEOUTS_MS.INTERVALO_STREAMING);
+      await this.pausa(CONFIG_QWEN.intervaloPollingMs);
       let evento: EstadoQwen | undefined;
       try {
         evento = (await this.transporte.evaluar<EstadoQwen>(scriptExtraerEstadoStreamingQwen())).value;
+        fallosConsecutivos = 0;
+        if (!urlRecuperacion) { try { urlRecuperacion=(await this.transporte.evaluar<string>("location.href")).value; } catch {} }
       } catch {
-        // WebBridge puede fallar de forma transitoria durante navegaciones o renders largos.
+        fallosConsecutivos++;
+        if (fallosConsecutivos >= CONFIG_QWEN.maxReintentosConsecutivosAntesRecuperar && this.transporte.recuperarPestana) {
+          yield { tipo:"estado", estado:"desconectado", progresoDetectado:false, estrategia:"dom", detalles:`reintento ${fallosConsecutivos}` };
+          await this.transporte.recuperarPestana("chat.qwen.ai", urlRecuperacion);
+        }
         continue;
       }
       const ahora = this.ahora();
 
       if (!evento) {
-        if (ahora - inicio >= CAPI_CONFIG.TIMEOUTS_MS.STREAMING_CHUNK_TIMEOUT) {
-          const conversacionId = await this.obtenerConversacionActual();
-          yield { tipo: "pausado", motivo: "No se pudo leer el estado de Qwen durante un periodo prolongado. Puedes retomar con 'capi chat --continuar'", conversacionId: conversacionId ?? undefined };
-          return;
-        }
+        if (ahora - ultimoHeartbeat >= CONFIG_QWEN.intervaloHeartbeatMs) { ultimoHeartbeat=ahora; yield {tipo:"estado",estado:"desconocido",progresoDetectado:false,estrategia:"dom"}; }
         continue;
       }
       if (evento.isError) {
@@ -57,17 +62,14 @@ export class QwenStreaming {
         return;
       }
       if (!evento.isAssistant) {
-        if (ahora - inicio >= CAPI_CONFIG.TIMEOUTS_MS.STREAMING_CHUNK_TIMEOUT) {
-          const conversacionId = await this.obtenerConversacionActual();
-          yield { tipo: "pausado", motivo: "Qwen no creó todavía un turno asistente. Puedes retomar con 'capi chat --continuar'", conversacionId: conversacionId ?? undefined };
-          return;
-        }
+        if (ahora - ultimoHeartbeat >= CONFIG_QWEN.intervaloHeartbeatMs) { ultimoHeartbeat=ahora; yield {tipo:"estado",estado:evento.isGenerating?"pensando":"esperando_turno",progresoDetectado:!!evento.isGenerating,estrategia:"dom"}; }
         continue;
       }
 
       const pensamiento = normalizar(evento.think || "");
       let respuesta = normalizar(evento.response || "");
-      if (!respuesta && /pensamiento completado/i.test(pensamiento) && this.transporte.snapshotAccesibilidad && ahora - ultimoRescateSnapshot >= INTERVALO_RESCATE_SNAPSHOT) {
+      if (ahora - ultimoHeartbeat >= CONFIG_QWEN.intervaloHeartbeatMs) { ultimoHeartbeat=ahora; yield {tipo:"estado",estado:respuesta?"respondiendo":pensamiento?"pensando":"esperando_respuesta",progresoDetectado:!!(evento.isGenerating||pensamiento||respuesta),estrategia:"dom"}; }
+      if (!respuesta && /pensamiento completado/i.test(pensamiento) && this.transporte.snapshotAccesibilidad && ahora - ultimoRescateSnapshot >= CONFIG_QWEN.intervaloSnapshotMs) {
         ultimoRescateSnapshot = ahora;
         try {
           respuesta = normalizar(extraerRespuestaSnapshotQwen((await this.transporte.snapshotAccesibilidad()).tree));

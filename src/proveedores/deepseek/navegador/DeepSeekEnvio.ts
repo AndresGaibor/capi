@@ -7,6 +7,7 @@ import { scriptEnviarPromptDeepSeek } from "../scripts/enviarPrompt";
 import { SELECTORES_DEEPSEEK } from "../selectores/SelectoresDeepSeek";
 import type { EstrategiaAdjuntos, ResultadoAdjuntos } from "../../../nucleo/archivos/EstrategiaAdjuntos";
 import { detectarTipoArchivo } from "../../../nucleo/archivos/DetectarTipoArchivo";
+import { EscritorEditorWeb } from "../../compartido/EscritorEditorWeb";
 
 const TAMANO_FRAGMENTO_BASE64 = 256 * 1024;
 
@@ -97,6 +98,7 @@ export class DeepSeekEnvio implements EstrategiaAdjuntos {
   }
 
   async enviar(prompt: string): Promise<void> {
+    if (this.transporte.rellenar) await new EscritorEditorWeb(this.transporte).escribir(SELECTORES_DEEPSEEK.textarea, prompt);
     const rutaInicial = (await this.transporte.evaluar<string>('location.pathname')).value ?? '';
     const resultado = await this.transporte.evaluar<{ok:boolean;error?:string;x?:number;y?:number}>(scriptEnviarPromptDeepSeek(prompt));
     if (!resultado.value?.ok) throw new ErrorPaginaProveedor(resultado.value?.error ?? 'No se pudo enviar el prompt a DeepSeek');

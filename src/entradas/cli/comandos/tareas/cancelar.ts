@@ -1,0 +1,3 @@
+import { defineCommand } from "citty";
+import { crearAplicacion } from "../../composicion/crearAplicacion";
+export const comandoTareasCancelar=defineCommand({meta:{name:"cancelar",description:"Solicitar cancelación cooperativa"},args:{id:{type:"positional" as const,required:true}},run({args}){const app=crearAplicacion();try{const id=String(args.id);if(!app.repositorioContexto.obtenerEjecucionChat(id)){process.stderr.write(`Ejecución no encontrada: ${id}\n`);process.exitCode=1;return;}app.repositorioContexto.solicitarCancelacionEjecucion(id);process.stdout.write(JSON.stringify({ok:true,id,estado:"cancelacion_solicitada"})+"\n");}finally{app.repositorioContexto.cerrar();}}});

@@ -1,0 +1,34 @@
+import { createHash } from "node:crypto";
+import type { EventoStreaming } from "../../../nucleo/chat/EventoStreaming";
+import type { EstadoEjecucionChat } from "../../../plataforma/persistencia/RepositorioEjecucionesChat";
+
+interface RepositorioSupervisor {
+  crearEjecucionChat?(entrada:any, ahora?:number):void;
+  actualizarEjecucionChat?(id:string,cambios:any,ahora?:number):void;
+  anexarEventoEjecucion?(id:string,tipo:string,datos:Record<string,unknown>,ahora?:number):unknown;
+  obtenerEjecucionChat?(id:string):any;
+}
+interface EntradaSupervisor { id:string; proyectoLocalId:string; proveedor:string; propietarioId:string; prompt:string; modelo?:string; conversacionId?:string; guardarContenido?:boolean; }
+
+export class SupervisorEjecucionChat {
+  private pensamiento=""; private respuesta=""; private conversacionId?:string; private modelo?:string;
+  constructor(private readonly repo:RepositorioSupervisor, private readonly entrada:EntradaSupervisor, private readonly ahora:()=>number=Date.now){ this.conversacionId=entrada.conversacionId; this.modelo=entrada.modelo; }
+  iniciar():void { if(!this.repo.crearEjecucionChat) return; const t=this.ahora(); const existente=this.repo.obtenerEjecucionChat?.(this.entrada.id); if(existente){ this.repo.actualizarEjecucionChat?.(this.entrada.id,{estado:"reconectando",propietarioId:this.entrada.propietarioId,cancelacionSolicitada:false,completadaEn:undefined,errorCodigo:undefined,errorDetalle:undefined},t); this.evento("ejecucion_reanudada",{proveedor:this.entrada.proveedor},t); return; } this.repo.crearEjecucionChat({id:this.entrada.id,proyectoLocalId:this.entrada.proyectoLocalId,proveedor:this.entrada.proveedor,modelo:this.modelo,conversacionId:this.conversacionId,estado:"creada",promptHash:createHash("sha256").update(this.entrada.prompt).digest("hex"),propietarioId:this.entrada.propietarioId},t); this.evento("ejecucion_creada",{proveedor:this.entrada.proveedor}); }
+  estado(estado:EstadoEjecucionChat,datos:Record<string,unknown>={}):void { const t=this.ahora(); this.repo.actualizarEjecucionChat?.(this.entrada.id,{estado,ultimoProgresoEn:t},t); this.evento("estado_cambiado",{estado,...datos},t); }
+  registrar(e:EventoStreaming):void { const t=this.ahora(); const base:any={ultimoProgresoEn:t,ultimoSondeoEn:t};
+    if(e.tipo==="estado"){ const mapa:any={esperando_turno:"esperando_respuesta",pensando:"pensando",esperando_respuesta:"esperando_respuesta",respondiendo:"respondiendo",estabilizando:"estabilizando",completado:"completada",error:"fallida",desconectado:"reconectando",estancado:"estancada",desconocido:"reconectando"}; this.repo.actualizarEjecucionChat?.(this.entrada.id,{...base,estado:mapa[e.estado]??"reconectando",estrategia:e.estrategia},t); this.evento("estado_proveedor",{estado:e.estado,progresoDetectado:e.progresoDetectado,estrategia:e.estrategia,detalles:e.detalles},t); return; }
+    if(e.tipo==="inicio") { const estado:EstadoEjecucionChat=/enviando/i.test(e.mensaje??"")?"enviando":/recibiendo|polling/i.test(e.mensaje??"")?"esperando_respuesta":"preparando"; this.repo.actualizarEjecucionChat?.(this.entrada.id,{...base,estado},t); this.evento("progreso",{mensaje:e.mensaje??""},t); return; }
+    if(e.tipo==="pensamiento"){ this.pensamiento+=e.contenido; this.repo.actualizarEjecucionChat?.(this.entrada.id,{...base,estado:"pensando",pensamientoParcial:this.entrada.guardarContenido===false?"":this.pensamiento},t); this.evento("pensamiento_actualizado",{caracteres:this.pensamiento.length},t); return; }
+    if(e.tipo==="respuesta"){ this.respuesta=e.reemplazo?e.contenido:this.respuesta+e.contenido; this.repo.actualizarEjecucionChat?.(this.entrada.id,{...base,estado:"respondiendo",respuestaParcial:this.entrada.guardarContenido===false?"":this.respuesta,estrategia:e.estrategia},t); this.evento("respuesta_actualizada",{caracteres:this.respuesta.length,estrategia:e.estrategia??"dom"},t); return; }
+    if(e.tipo==="conversacion"){ this.conversacionId=e.id; this.repo.actualizarEjecucionChat?.(this.entrada.id,{...base,conversacionId:e.id},t); this.evento("conversacion_detectada",{conversacionId:e.id},t); return; }
+    if(e.tipo==="modelo"){ this.modelo=e.nombre; this.repo.actualizarEjecucionChat?.(this.entrada.id,{...base,modelo:e.nombre},t); this.evento("modelo_seleccionado",{modelo:e.nombre},t); return; }
+    if(e.tipo==="pausado"){ this.repo.actualizarEjecucionChat?.(this.entrada.id,{...base,estado:"reconectando"},t); this.evento("ejecucion_pausada",{motivo:e.motivo},t); return; }
+    if(e.tipo==="error"){ this.repo.actualizarEjecucionChat?.(this.entrada.id,{...base,estado:e.recuperable?"reconectando":"fallida",errorDetalle:e.mensaje,completadaEn:e.recuperable?undefined:t},t); this.evento("error",{mensaje:e.mensaje,recuperable:!!e.recuperable},t); return; }
+    if(e.tipo==="fin"){ this.repo.actualizarEjecucionChat?.(this.entrada.id,{...base,estado:"completada",completadaEn:t},t); this.evento("ejecucion_completada",{respuestaCaracteres:this.respuesta.length},t); }
+  }
+  heartbeat(datos:Record<string,unknown>={}):void { const t=this.ahora(); this.repo.actualizarEjecucionChat?.(this.entrada.id,{ultimoSondeoEn:t},t); this.evento("heartbeat",datos,t); }
+  incrementarReintentos(codigo?:string):void { const a=this.repo.obtenerEjecucionChat?.(this.entrada.id); const t=this.ahora(); this.repo.actualizarEjecucionChat?.(this.entrada.id,{reintentos:(a?.reintentos??0)+1,errorCodigo:codigo},t); this.evento("reintento",{codigo},t); }
+  verificarCancelacion():void { if(this.repo.obtenerEjecucionChat?.(this.entrada.id)?.cancelacionSolicitada){ const t=this.ahora(); this.repo.actualizarEjecucionChat?.(this.entrada.id,{estado:"cancelada",completadaEn:t},t); this.evento("ejecucion_cancelada",{},t); throw new Error("La ejecución fue cancelada por el usuario"); } }
+  marcarFallo(error:unknown,codigo?:string):void { const t=this.ahora(); const mensaje=error instanceof Error?error.message:String(error); const codigoReal=codigo??(error&&typeof error==="object"&&"codigo" in error?String((error as any).codigo):undefined); const requiereUsuario=codigoReal==="LEASE_PERDIDO"; this.repo.actualizarEjecucionChat?.(this.entrada.id,{estado:requiereUsuario?"requiere_usuario":"fallida",completadaEn:t,errorCodigo:codigoReal,errorDetalle:mensaje},t); this.evento(requiereUsuario?"requiere_usuario":"ejecucion_fallida",{codigo:codigoReal,mensaje},t); }
+  private evento(tipo:string,datos:Record<string,unknown>,t=this.ahora()){ this.repo.anexarEventoEjecucion?.(this.entrada.id,tipo,datos,t); }
+}

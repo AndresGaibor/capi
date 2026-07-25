@@ -1,0 +1,4 @@
+import { defineCommand } from "citty";
+import { listarEventos, obtenerEjecucion, terminales } from "./durable";
+const dormir=(ms:number)=>new Promise(r=>setTimeout(r,ms));
+export const comandoTareasSeguir=defineCommand({ meta:{name:"seguir",description:"Reproducir y seguir el diario durable de una ejecución"}, args:{id:{type:"positional" as const,required:true},desde:{type:"string" as const,default:"0"},esperar:{type:"boolean" as const,default:false}}, async run({args}){ const id=String(args.id); let sec=Number(args.desde||0); do { const eventos=listarEventos(id,sec); for(const e of eventos){ process.stdout.write(JSON.stringify(e)+"\n"); sec=e.secuencia; } const actual=obtenerEjecucion(id); if(!actual){ process.stderr.write(`Ejecución no encontrada: ${id}\n`); process.exitCode=1; return; } if(!args.esperar||terminales.has(actual.estado)) return; await dormir(1000); } while(true); }});
