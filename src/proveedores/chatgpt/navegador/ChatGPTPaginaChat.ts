@@ -1,6 +1,8 @@
 import type { EventoStreaming } from "../../../nucleo/chat/EventoStreaming";
 import type { ModeloChat, ConversacionResumen } from "../../../nucleo/proveedores/ProveedorChat";
 import type { TransporteNavegador } from "../../../plataforma/webbridge/TransporteNavegador";
+import { SupervisorStreamingProveedor } from "../../compartido/SupervisorStreamingProveedor";
+import { configuracionProveedor } from "../../../configuracion/ConfiguracionProveedores";
 import { CAPI_CONFIG } from "../../../configuracion/ConstantesCapi";
 import { scriptEnviarPromptChatGPT } from "../scripts/enviarPrompt";
 import { scriptEstadoStreamingChatGPT } from "../scripts/estadoStreaming";
@@ -218,15 +220,11 @@ export class ChatGPTPaginaChat {
     let anterior = this.respuestaAntes;
     const imagenesObservadas = new Set<string>();
     let ultimoCambio = Date.now();
-    const inicio = Date.now();
     let fallosConsecutivos = 0;
     const MAX_FALLOS_EVALUAR = 3;
+    const supervisor = new SupervisorStreamingProveedor(configuracionProveedor("chatgpt"), Date.now());
     for (;;) {
       await dormir(CAPI_CONFIG.TIMEOUTS_MS.INTERVALO_STREAMING);
-      if (Date.now() - inicio >= CAPI_CONFIG.TIMEOUTS_MS.STREAMING_CHATGPT) {
-        yield { tipo: "pausado", motivo: "ChatGPT sigue procesando después de dos horas. Retoma con --continuar.", conversacionId: await this.obtenerConversacionActual() ?? undefined };
-        return;
-      }
       let estado: { response: string; images?: Array<{ url: string; alt?: string }>; turns: number; isGenerating: boolean; done: boolean; error?: string; continueGenerating?: boolean } | undefined;
       try {
         estado = (await this.transporte.evaluar<{ response: string; images?: Array<{ url: string; alt?: string }>; turns: number; isGenerating: boolean; done: boolean; error?: string; continueGenerating?: boolean }>(scriptEstadoStreamingChatGPT())).value;
@@ -234,8 +232,9 @@ export class ChatGPTPaginaChat {
       } catch {
         fallosConsecutivos++;
         if (fallosConsecutivos >= MAX_FALLOS_EVALUAR) {
-          yield { tipo: "error", mensaje: "No se pudo leer el estado de ChatGPT después de varios intentos", recuperable: true };
-          return;
+          yield { tipo: "estado", estado: "desconectado", progresoDetectado: false, estrategia: "dom", detalles: `reintento ${fallosConsecutivos}` };
+          const conversacion = await this.obtenerConversacionActual();
+          await this.transporte.recuperarPestana?.("chatgpt.com", conversacion ?? "https://chatgpt.com/");
         }
         continue;
       }
@@ -243,6 +242,8 @@ export class ChatGPTPaginaChat {
         yield { tipo: "error", mensaje: estado.error, recuperable: true };
         return;
       }
+      const firma = `${estado?.turns ?? 0}:${estado?.response?.length ?? 0}:${estado?.isGenerating ? 1 : 0}:${estado?.done ? 1 : 0}`;
+      for (const eventoSupervisor of supervisor.observar(firma, estado?.response ? "respondiendo" : estado?.isGenerating ? "pensando" : "esperando_respuesta", Date.now())) yield eventoSupervisor;
       const esNuevoTurno = (estado?.turns ?? 0) > this.asistentesAntes || (estado?.response !== this.respuestaAntes && estado?.response !== "");
       if (!esNuevoTurno) continue;
       for (const imagen of estado?.images ?? []) if (imagen.url && !imagenesObservadas.has(imagen.url)) { imagenesObservadas.add(imagen.url); ultimoCambio = Date.now(); yield { tipo: "imagen", url: imagen.url, alt: imagen.alt }; }
