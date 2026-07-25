@@ -36,7 +36,10 @@ export function scriptExtraerEstadoStreamingQwen(): string {
     if(response && think && response.startsWith(think)) response=response.slice(think.length).trim();
     const stop=__capiDom.primeroVisible(S.detenerCandidatos,document);
     const toolbar=lastAssistant && (__capiDom.primeroVisible(S.toolbar,lastAssistant) || lastAssistant.querySelector(S.toolbar.join(',')));
-    const errorNode=lastAssistant?.querySelector('[role="alert"],.qwen-alert,.qwen-messsage-status,[data-testid*="error" i]')||null;
+    const erroresGlobales=[...document.querySelectorAll('[role="alert"],.qwen-alert,.qwen-messsage-status,[data-testid*="error" i],[class*="toast" i],[class*="message-notice" i]')];
+    const errorNode=(lastAssistant?.querySelector('[role="alert"],.qwen-alert,.qwen-messsage-status,[data-testid*="error" i]')||null)
+      || erroresGlobales.find(n=>/conversaci[oó]n ha sido eliminada|conversation (?:was|has been) deleted|alta demanda|high demand|server is busy|error/i.test(__capiDom.textoLimpio(n)))
+      || null;
     const isError=!!errorNode;
     const input=__capiDom.primeroVisible(S.entrada,document);
     const inputDisponible=!!input && !input.disabled && input.getAttribute('aria-disabled')!=='true';
