@@ -34,6 +34,7 @@
     "smoke:archivo:deepseek": "bun run scripts/smoke-archivo.ts deepseek",
     "smoke:imagen:qwen": "bun run scripts/smoke-imagen.ts qwen",
     "contracts:check": "bun run scripts/verificar-contratos.ts",
-    "state:metrics": "bun run src/cli.ts estado metricas --output json"
+    "state:metrics": "bun run src/cli.ts estado metricas --output json",
+    "smoke:recuperacion": "bun run scripts/smoke-recuperacion.ts"
   }
 }

@@ -1,0 +1,3 @@
+import { TransporteWebBridge } from '../src/plataforma/webbridge/TransporteWebBridge';
+import { crearAplicacion } from '../src/entradas/cli/composicion/crearAplicacion';
+const transporte=new TransporteWebBridge();const app=crearAplicacion();try{const disponible=await transporte.estaDisponible();const tareas=app.repositorioContexto.metricasEjecucionesChat();const qwen=disponible?await transporte.recuperarPestana?.('chat.qwen.ai'):false;process.stdout.write(JSON.stringify({ok:disponible,webbridge:disponible,qwenLocalizado:!!qwen,tareas,verificadoEn:Date.now()})+'\n');if(!disponible)process.exitCode=2}finally{app.repositorioContexto.cerrar()}

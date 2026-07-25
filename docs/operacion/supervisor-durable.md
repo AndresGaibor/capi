@@ -23,3 +23,16 @@ Use `CAPI_NO_GUARDAR_RESPUESTAS=1` para persistir solo estados, hashes y métric
 ## Tampermonkey opcional
 
 `~/code/javascript/tampermonkey-scripts/dist/capi-qwen-observador.user.js` publica únicamente estado, heartbeat y conteo de mutaciones en `window.__CAPI_QWEN_BRIDGE__`. No controla envíos y no es requisito para CAPI.
+
+## Operación ampliada
+
+```bash
+capi tareas metricas
+capi tareas compactar <id> --conservar 10
+capi tareas limpiar --anteriores-a 30d --confirmar
+capi tareas logs <id> --ultimas 100
+capi diagnostico ejecucion <id>
+capi diagnostico red listar
+```
+
+SQLite es la única fuente de verdad para tareas nuevas. Las ejecuciones huérfanas pasan a `reconectando`, la adopción es atómica y `estancada` nunca cancela automáticamente. Qwen usa el bridge Tampermonkey v2 como señal secundaria opcional; DeepSeek y ChatGPT comparten heartbeat, recuperación y estancamiento no terminal.
