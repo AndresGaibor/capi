@@ -26,12 +26,15 @@ import { EmpaquetadorContexto } from "../../../modulos/contexto/aplicacion/Empaq
 import { ConsultarHistorialProyecto } from "../../../modulos/historial/aplicacion/ConsultarHistorialProyecto";
 import { VerificarContratosProveedor } from "../../../modulos/diagnostico/aplicacion/VerificarContratosProveedor";
 import { GestionarEstadoProyecto } from "../../../modulos/mantenimiento/aplicacion/GestionarEstadoProyecto";
+import { ChatGPTPaginaChat } from "../../../proveedores/chatgpt/navegador/ChatGPTPaginaChat";
+import { ProveedorChatGPT } from "../../../proveedores/chatgpt/ProveedorChatGPT";
 
 export function crearAplicacion() {
   const transporte = new TransporteWebBridge();
   const proveedores = new RegistroProveedores();
   const gestorPestanas = new GestorPestanas(transporte);
   proveedores.registrar(new ProveedorQwen(new QwenPaginaChat(transporte, gestorPestanas)));
+  proveedores.registrar(new ProveedorChatGPT(new ChatGPTPaginaChat(transporte)));
   const sesionDeepSeek = new DeepSeekSesion(transporte, new SesionDeepSeekArchivo());
   proveedores.registrar(new ProveedorDeepSeek(new DeepSeekPaginaChat(transporte, gestorPestanas), new DeepSeekConversaciones(new DeepSeekClienteConversaciones(transporte, sesionDeepSeek), new DeepSeekLectorHistorial(transporte)), sesionDeepSeek));
   const rutaDatos = process.env.CAPI_DATA_DIR ?? join(homedir(), ".local", "share", "capi");

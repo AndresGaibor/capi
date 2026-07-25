@@ -3,6 +3,7 @@ export interface PeticionChat {
   prompt: string;
   modelo?: string;
   archivos?: string[];
+  imagenes?: string[];
   contexto?: {
     empaquetar?: boolean;
     incluirDiff?: boolean;
@@ -20,4 +21,5 @@ export interface PeticionChat {
     razonamiento?: boolean;
     busquedaWeb?: boolean;
   };
+  soloPoll?: boolean;
 }

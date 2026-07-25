@@ -23,3 +23,16 @@ Este archivo define las reglas de codificación, las convenciones del entorno de
 Cualquier cambio en la lógica de dominio o servicios debe incluir su correspondiente test en la carpeta `test/`:
 - Formato del nombre: `test/<modulo>.test.ts`.
 - Ejecución rápida: `bun test`.
+
+## 🤖 Navegación por la Documentación para Agentes (AGENTS.md)
+
+Para explorar el proyecto rápidamente sin realizar búsquedas ciegas:
+- **Mapa Principal**: Consulta [`AGENTS.md`](file:///Users/andresgaibor/code/javascript/capi/AGENTS.md) en la raíz para ver la tabla de correspondencia entre capas y módulos.
+- **Guías por Capa**:
+  - Contratos y tipos base: [`src/nucleo/AGENTS.md`](file:///Users/andresgaibor/code/javascript/capi/src/nucleo/AGENTS.md)
+  - Casos de uso neutrales: [`src/modulos/AGENTS.md`](file:///Users/andresgaibor/code/javascript/capi/src/modulos/AGENTS.md)
+  - Integración de proveedores LLM: [`src/proveedores/AGENTS.md`](file:///Users/andresgaibor/code/javascript/capi/src/proveedores/AGENTS.md)
+  - Adaptadores de infraestructura y persistencia: [`src/plataforma/AGENTS.md`](file:///Users/andresgaibor/code/javascript/capi/src/plataforma/AGENTS.md)
+  - Entradas CLI y MCP: [`src/entradas/AGENTS.md`](file:///Users/andresgaibor/code/javascript/capi/src/entradas/AGENTS.md)
+  - Suite de tests: [`test/AGENTS.md`](file:///Users/andresgaibor/code/javascript/capi/test/AGENTS.md)
+

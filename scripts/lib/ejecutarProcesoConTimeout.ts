@@ -8,10 +8,12 @@ export interface ResultadoProceso {
 export async function ejecutarProcesoConTimeout(
   comando: string[],
   timeoutMs: number,
+  env?: Record<string, string>,
 ): Promise<ResultadoProceso> {
   const proceso = Bun.spawn(comando, {
     stdout: "pipe",
     stderr: "pipe",
+    env: { ...process.env, ...env },
   });
 
   let timeout = false;

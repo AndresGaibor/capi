@@ -29,7 +29,7 @@ export class DiagnosticarCompleto {
     } catch (error) { persistencia = { ok: false, error: String(error) }; }
 
     const resultados = [];
-    for (const id of ["qwen", "deepseek"]) {
+    for (const id of ["qwen", "deepseek", "chatgpt"]) {
       try {
         const proveedor = this.proveedores.obtener(id);
         await proveedor.verificarDisponibilidad();

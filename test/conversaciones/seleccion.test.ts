@@ -17,7 +17,7 @@ test("prioriza una conversación reciente de la ruta actual", () => {
   expect(resultado).toEqual({ conversacionId: "2", motivo: "reciente_ruta" });
 });
 
-test("crea nueva si la mejor candidata está ocupada", () => {
+test("conserva la conversación ocupada y no selecciona una nueva", () => {
   const resultado = seleccionarConversacion({
     ahora,
     umbralMs: 12 * 60 * 60 * 1000,
@@ -25,5 +25,16 @@ test("crea nueva si la mejor candidata está ocupada", () => {
     proyectoLocalId: "p1",
     candidatas: [{ id: "1", proveedor: "qwen", proyectoLocalId: "p1", usadaEn: ahora - 1000, ocupada: true, archivada: false }],
   });
-  expect(resultado.motivo).toBe("nueva_por_ocupacion");
+  expect(resultado).toEqual({ conversacionId: "1", motivo: "ocupada" });
+});
+
+test("reutiliza una conversación persistente aunque sea antigua", () => {
+  const resultado = seleccionarConversacion({
+    ahora,
+    umbralMs: 12 * 60 * 60 * 1000,
+    proveedor: "qwen",
+    proyectoLocalId: "p1",
+    candidatas: [{ id: "1", proveedor: "qwen", proyectoLocalId: "p1", usadaEn: ahora - 7 * 24 * 60 * 60 * 1000, ocupada: false, archivada: false }],
+  });
+  expect(resultado).toEqual({ conversacionId: "1", motivo: "persistente" });
 });

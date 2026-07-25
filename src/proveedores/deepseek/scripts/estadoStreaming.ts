@@ -3,13 +3,20 @@ export const scriptEstadoStreamingDeepSeek = () => `(() => {
   const extraer = raw => {
     const partes = [];
     const visitar = valor => {
-      if (!valor) return;
-      if (typeof valor === 'string') return;
+      if (!valor || typeof valor !== 'object') return;
       if (Array.isArray(valor)) { valor.forEach(visitar); return; }
-      if (typeof valor !== 'object') return;
-      for (const [clave, contenido] of Object.entries(valor)) {
-        if (typeof contenido === 'string' && /^(content|text|response|answer)$/i.test(clave)) partes.push(contenido);
-        else visitar(contenido);
+      const objeto = valor;
+      const choices = Array.isArray(objeto.choices) ? objeto.choices : [];
+      for (const choice of choices) {
+        const delta = choice?.delta;
+        const mensaje = choice?.message;
+        if (typeof delta?.content === 'string') partes.push(delta.content);
+        else if (typeof mensaje?.content === 'string') partes.push(mensaje.content);
+      }
+      for (const [clave, contenido] of Object.entries(objeto)) {
+        if (clave === 'choices') continue;
+        if (typeof contenido === 'string' && /^(response|answer)$/i.test(clave)) partes.push(contenido);
+        else if (contenido && typeof contenido === 'object') visitar(contenido);
       }
     };
     for (const linea of String(raw || '').replaceAll(String.fromCharCode(13), '').split(String.fromCharCode(10))) {
@@ -17,8 +24,13 @@ export const scriptEstadoStreamingDeepSeek = () => `(() => {
       if (!dato || dato === '[DONE]') continue;
       try { visitar(JSON.parse(dato)); } catch {}
     }
-    const unicas = partes.filter((p, i) => p && (i === 0 || p !== partes[i - 1]));
-    return unicas.join('');
+    let resultado = '';
+    for (const parte of partes.filter(Boolean)) {
+      if (parte === resultado || resultado.endsWith(parte)) continue;
+      if (parte.startsWith(resultado)) resultado = parte;
+      else if (!resultado.startsWith(parte)) resultado += parte;
+    }
+    return resultado;
   };
   const thinkNodes = [...document.querySelectorAll('[class*="thinking"], [class*="reasoning"]')];
   const respNodes = [...document.querySelectorAll('.ds-markdown, [class*="markdown"], [class*="response"]')];

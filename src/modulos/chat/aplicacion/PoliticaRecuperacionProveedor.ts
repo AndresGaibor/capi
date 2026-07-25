@@ -17,6 +17,9 @@ const CADENAS_MODELOS: Record<string, Record<string, string[]>> = {
     vision: ["vision", "default"],
     default: ["default"],
   },
+  chatgpt: {
+    auto: ["auto"],
+  },
 };
 
 export function construirIntentosRecuperacion(proveedor: string, modelo?: string): IntentoProveedor[] {
@@ -32,8 +35,9 @@ export function esErrorTransitorioProveedor(error: unknown): boolean {
   return /alta demanda|high demand|server is busy|servidor ocupado|temporarily unavailable|try again later|inténtelo de nuevo|timeout|timed out|connection|conectando|no produjo respuesta/i.test(mensaje);
 }
 
-export function sugerenciaProveedorAlternativo(proveedor: string): string {
+export function sugerenciaProveedorAlternativo(proveedor: string, prompt = "tu mensaje"): string {
+  const p = prompt.trim() || "tu mensaje";
   return proveedor.toLowerCase() === "qwen"
-    ? 'Prueba DeepSeek: capi chat -p deepseek -m default "tu mensaje"'
-    : 'Prueba Qwen: capi chat -p qwen -m max "tu mensaje"';
+    ? `Prueba DeepSeek: capi chat -p deepseek -m default ${JSON.stringify(p)}`
+    : `Prueba Qwen: capi chat -p qwen -m max ${JSON.stringify(p)}`;
 }

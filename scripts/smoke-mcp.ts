@@ -7,7 +7,7 @@ try {
   await client.connect(transport);
   const tools = await client.listTools();
   const names = tools.tools.map((tool) => tool.name);
-  for (const required of ["capi_discover", "capi_schema", "capi_project_current", "capi_conversations_project", "capi_doctor", "capi_context_pack", "capi_context_explain", "capi_history_project", "capi_diagnostics_contracts", "capi_state_metrics", "capi_state_clean", "capi_state_export", "capi_state_import", "capi_chat"]) {
+  for (const required of ["capi_discover", "capi_schema", "capi_project_current", "capi_conversations_project", "capi_doctor", "capi_context_pack", "capi_context_explain", "capi_history_project", "capi_diagnostics_contracts", "capi_state_metrics", "capi_state_clean", "capi_state_export", "capi_state_import", "capi_vision_analyze", "capi_vision_compare", "capi_chat"]) {
     if (!names.includes(required)) throw new Error(`Falta herramienta MCP: ${required}`);
   }
   const result = await client.callTool({ name: "capi_discover", arguments: {} });

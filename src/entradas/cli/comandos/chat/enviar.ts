@@ -6,13 +6,32 @@ import { RenderizadorAgenteStreaming } from "../../agente/RenderizadorAgenteStre
 import { crearSobreError, crearSobreExito, codigoSalidaParaError, serializarSalida, type FormatoSalida } from "../../agente/FormatoSalida";
 import { sugerenciaProveedorAlternativo } from "../../../../modulos/chat/aplicacion/PoliticaRecuperacionProveedor";
 import { interpretarFuentesContexto } from "../../../../modulos/contexto/aplicacion/InterpretarFuentesContexto";
+import { separarAdjuntosContexto } from "../../../../modulos/contexto/aplicacion/SepararAdjuntosContexto";
+import { spawn } from "node:child_process";
+import { actualizarTarea, crearTarea } from "../../soporte/tareas";
+
+function normalizarConversacionId(valor: string): string {
+  try {
+    const url = new URL(valor);
+    if (url.hostname === "chat.qwen.ai" || url.hostname === "qwen.ai") {
+      const match = url.pathname.match(/\/c\/([^/?#]+)/);
+      if (match) return match[1]!;
+    }
+    if (url.hostname === "chat.deepseek.com" || url.hostname === "deepseek.com") {
+      const match = url.pathname.match(/(?:\/chat\/|\/a\/chat\/s\/)([^/?#]+)/);
+      if (match) return match[1]!;
+    }
+  } catch {}
+  return valor;
+}
 
 export const argumentosChat = {
-  prompt: { type: "positional" as const, required: true, description: "Prompt" },
+  prompt: { type: "positional" as const, required: false, description: "Prompt" },
   proveedor: { type: "string" as const, alias: "p" },
   conversacion: { type: "string" as const, alias: "c" },
   modelo: { type: "string" as const, alias: "m" },
   razonamiento: { type: "boolean" as const }, busqueda: { type: "boolean" as const }, archivo: { type: "string" as const, alias: "f", description: "Archivo, directorio, glob, JSON, lista por comas o @manifiesto" },
+  imagen: { type: "string" as const, alias: "i", description: "Imagen; puede repetirse o aceptar coma, JSON y @manifiesto" },
   diff: { type: "boolean" as const, description: "Incluir git diff staged y unstaged" },
   limiteContexto: { type: "string" as const, description: "Máximo del paquete de contexto en bytes" },
   empaquetar: { type: "boolean" as const, default: true, description: "Combinar fuentes en un único archivo de contexto" },
@@ -20,6 +39,8 @@ export const argumentosChat = {
   incremental: { type: "boolean" as const, default: false, description: "Omitir archivos sin cambios ya enviados a la conversación" },
   resumen: { type: "boolean" as const, default: false, description: "Adjuntar el resumen persistente de la conversación" },
   nueva: { type: "boolean" as const, description: "Forzar una conversación nueva" },
+  continuar: { type: "boolean" as const, description: "Solo hacer polling de la conversación actual sin enviar mensaje" },
+  background: { type: "boolean" as const, description: "Ejecutar el envío como tarea de fondo" },
   fallback: { type: "boolean" as const, default: true, description: "Permitir reintentos y degradación inteligente" },
   output: { type: "string" as const, alias: "o", default: "human", description: "human|markdown|json|jsonl" },
   requestId: { type: "string" as const, description: "Identificador correlacionable de la petición" },
@@ -30,47 +51,96 @@ export const argumentosChat = {
 
 const formatos = new Set(["human", "markdown", "json", "jsonl"]);
 
+export function recogerImagenesArgumentos(args: Record<string, unknown>, argv = process.argv.slice(2)): string[] {
+  const valores: string[] = [];
+  if (Array.isArray(args.imagenes)) valores.push(...args.imagenes.map(String));
+  if (args.imagen) valores.push(String(args.imagen));
+  for (let i = 0; i < argv.length; i++) {
+    const actual = argv[i]!;
+    if ((actual === "--imagen" || actual === "-i") && argv[i + 1]) valores.push(argv[++i]!);
+    else if (actual.startsWith("--imagen=")) valores.push(actual.slice("--imagen=".length));
+  }
+  return [...new Set(valores.flatMap(valor => interpretarFuentesContexto(valor)))];
+}
+
+
 export async function ejecutarChat(args: Record<string, unknown>): Promise<void> {
   const formato = String(args.output ?? "human") as FormatoSalida;
   const requestId = args.requestId ? String(args.requestId) : crypto.randomUUID();
   if (!formatos.has(formato)) throw new Error(`Formato no soportado: ${formato}`);
+  if (args.background && !process.env.CAPI_TASK_CHILD) {
+    const tarea = crearTarea();
+    const argumentos = process.argv.slice(2).filter((argumento) => argumento !== "--background" && !argumento.startsWith("--background="));
+    const hijo = spawn(process.execPath, [process.argv[1]!, ...argumentos], { detached: true, stdio: "ignore", env: { ...process.env, CAPI_TASK_CHILD: "1", CAPI_TASK_ID: tarea.id } });
+    hijo.unref();
+    process.stdout.write(`${JSON.stringify({ taskId: tarea.id, estado: tarea.estado, comando: `capi tareas estado ${tarea.id}` })}\n`);
+    return;
+  }
+  const tareaId = process.env.CAPI_TASK_ID;
+  if (tareaId) actualizarTarea(tareaId, { estado: "ejecutando" });
   const app = crearAplicacion();
   const proyecto = app.gestorContexto.proyectoActual();
   const preferencias = app.repositorioContexto.obtenerPreferencias(proyecto.id);
   const proveedor = args.proveedor ? String(args.proveedor) : preferencias?.proveedor ?? "deepseek";
   const modelo = args.modelo ? String(args.modelo) : preferencias?.modelo;
-  const conversacionId = args.conversacion ? String(args.conversacion) : undefined;
+  const continuar = Boolean(args.continuar);
+  const prompt = String(args.prompt ?? "").trim();
+  if (!continuar && !prompt) throw new Error("Debes proporcionar un prompt. Usa --continuar para consultar una respuesta pendiente.");
+  if (args.nueva && (args.conversacion || continuar)) throw new Error("--nueva no se puede combinar con --conversacion ni --continuar.");
+  if (continuar && (prompt || args.nueva || args.archivo || args.imagen)) throw new Error("--continuar solo hace polling: no acepta prompt, archivos, imágenes ni --nueva.");
+  let conversacionId = args.conversacion ? normalizarConversacionId(String(args.conversacion)) : undefined;
+  if (!args.dryRun && !args.nueva && !conversacionId) {
+    const proveedorActual = app.proveedores.obtener(proveedor);
+    conversacionId = proveedorActual.obtenerConversacionActual
+      ? (await proveedorActual.obtenerConversacionActual()) ?? undefined
+      : undefined;
+  }
   const seleccion = app.gestorContexto.seleccionar(proveedor, conversacionId).seleccion;
+  const imagenes = continuar ? [] : recogerImagenesArgumentos(args);
+
+  if (continuar && !conversacionId) throw new Error("No se encontró una conversación activa. Usa --conversacion URL_O_ID.");
 
   if (args.dryRun) {
-    const fuentes = interpretarFuentesContexto(args.archivo ? String(args.archivo) : undefined);
-    const plan = { project: proyecto, provider: proveedor, model: modelo ?? "default", selection: args.nueva ? { motivo: "nueva" } : seleccion, fallback: Boolean(args.fallback), context: { sources: fuentes, automatic: Boolean(args.contextoAuto), incremental: Boolean(args.incremental), includeSummary: Boolean(args.resumen), includeGitDiff: Boolean(args.diff), maxBytes: args.limiteContexto ? Number(args.limiteContexto) : undefined, bundledAsSingleTextFile: args.empaquetar !== false }, actions: ["seleccionar conversación", "preparar contexto", "adquirir lease", "navegar proveedor", "enviar prompt", "registrar conversación"] };
+    const fuentes = continuar ? [] : interpretarFuentesContexto(args.archivo ? String(args.archivo) : undefined);
+    const clasificacion = separarAdjuntosContexto([...fuentes, ...imagenes]);
+    const plan = { project: proyecto, provider: proveedor, model: modelo ?? "auto", selection: args.nueva ? { motivo: "nueva" } : seleccion, fallback: Boolean(args.fallback), context: { sources: fuentes, images: imagenes, classification: { text: clasificacion.textuales, images: clasificacion.imagenes, documents: clasificacion.documentos, rejected: clasificacion.rechazados }, automatic: Boolean(args.contextoAuto), incremental: Boolean(args.incremental), includeSummary: Boolean(args.resumen), includeGitDiff: Boolean(args.diff), maxBytes: args.limiteContexto ? Number(args.limiteContexto) : undefined, bundledAsSingleTextFile: args.empaquetar !== false }, actions: continuar ? ["seleccionar conversación", "navegar proveedor", "polling respuesta"] : ["seleccionar conversación", "preparar contexto", "adquirir lease", "navegar proveedor", "enviar prompt", "registrar conversación"] };
     const sobre = crearSobreExito("chat.send.dry-run", plan, { requestId });
     process.stdout.write(serializarSalida(sobre, formato === "human" ? "markdown" : formato) + "\n");
+    if (tareaId) actualizarTarea(tareaId, { estado: "completada", conversacionId });
     return;
   }
 
   try {
+    const promptEnvio = continuar ? "continuar" : prompt;
     const eventos = app.enviarMensaje.ejecutar(proveedor, {
-      conversacionId, prompt: String(args.prompt), modelo,
-      archivos: interpretarFuentesContexto(args.archivo ? String(args.archivo) : undefined),
+      conversacionId, prompt: promptEnvio, modelo,
+      archivos: continuar ? undefined : interpretarFuentesContexto(args.archivo ? String(args.archivo) : undefined),
+      imagenes,
       contexto: { incluirDiff: Boolean(args.diff), maxBytes: args.limiteContexto ? Number(args.limiteContexto) : undefined, empaquetar: args.empaquetar !== false, automatico: Boolean(args.contextoAuto), incremental: Boolean(args.incremental), incluirResumen: Boolean(args.resumen) },
       forzarNueva: Boolean(args.nueva), permitirFallback: Boolean(args.fallback), timeoutMs: args.timeout ? Number(args.timeout) : undefined,
       opciones: { razonamiento: args.razonamiento === undefined ? preferencias?.razonamiento : Boolean(args.razonamiento), busquedaWeb: args.busqueda === undefined ? preferencias?.busquedaWeb : Boolean(args.busqueda) },
+      soloPoll: continuar,
     });
     if (formato === "human") {
       const renderizador = new RenderizadorStreaming();
-      if (args.explain) consola.info(`Proyecto=${proyecto.nombre}; proveedor=${proveedor}; modelo=${modelo ?? "predeterminado"}; selección=${seleccion.motivo}`);
-      for await (const evento of eventos) renderizador.renderizar(evento);
+      if (args.explain) consola.info(`Proyecto=${proyecto.nombre}; proveedor=${proveedor}; modelo=${modelo ?? "predeterminado"}; selección=${seleccion.motivo}${continuar ? " (solo polling)" : ""}`);
+      let pausada = false;
+      for await (const evento of eventos) { pausada ||= evento.tipo === "pausado"; renderizador.renderizar(evento); }
+      if (tareaId) actualizarTarea(tareaId, { estado: pausada ? "pausada" : "completada", conversacionId });
     } else {
       const renderizador = new RenderizadorAgenteStreaming("chat.send", formato, requestId);
-      for await (const evento of eventos) renderizador.renderizar(evento);
+      let pausada = false;
+      for await (const evento of eventos) { pausada ||= evento.tipo === "pausado"; renderizador.renderizar(evento); }
+      if (tareaId) actualizarTarea(tareaId, { estado: pausada ? "pausada" : "completada", conversacionId });
     }
   } catch (error) {
+    if (tareaId) actualizarTarea(tareaId, { estado: "fallida", conversacionId, error: error instanceof Error ? error.message : String(error) });
     if (formato === "human") { consola.error(error instanceof Error ? error.message : String(error)); consola.info(sugerenciaProveedorAlternativo(proveedor)); }
     else {
       const alternativa = proveedor === "qwen" ? "deepseek" : "qwen";
-      const sobre = crearSobreError("chat.send", error, { requestId, suggestions: [{ command: `capi chat -p ${alternativa} --output jsonl ${JSON.stringify(String(args.prompt))}`, reason: "usar el proveedor alternativo" }] });
+      const rawPrompt = String(args.prompt || "").trim();
+      const sugerenciaPrompt = (rawPrompt && rawPrompt.toLowerCase() !== "send") ? rawPrompt : "tu mensaje";
+      const sobre = crearSobreError("chat.send", error, { requestId, suggestions: [{ command: `capi chat -p ${alternativa} --output jsonl ${JSON.stringify(sugerenciaPrompt)}`, reason: "usar el proveedor alternativo" }] });
       process.stdout.write(serializarSalida(sobre, formato === "jsonl" ? "jsonl" : formato) + "\n");
       process.exitCode = codigoSalidaParaError(sobre.error?.code);
     }

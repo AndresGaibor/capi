@@ -12,8 +12,8 @@ class TransporteArchivo {
     this.scripts.push(codigo);
     if (codigo.includes('data-menu-id$="-upload"')) return { value: { ok:true } as T };
     if (codigo.includes("const texto = document.body.innerText")) return { value: { visible:true, procesando:false, error:"" } as T };
-    if (codigo.includes("const botones") && codigo.includes("Eliminar archivo")) return { value: 1 as T };
-    if (codigo.includes("querySelectorAll") && codigo.includes("Eliminar archivo") && codigo.includes(".length")) return { value: 0 as T };
+    if (codigo.includes("const botones") && codigo.includes("Eliminar")) return { value: 1 as T };
+    if (codigo.includes("querySelectorAll") && codigo.includes("Eliminar") && codigo.includes(".length")) return { value: 0 as T };
     if (codigo.includes("new File")) return { value: { ok:true, name:"contexto.txt" } as T };
     return { value: true as T };
   }
@@ -38,7 +38,7 @@ test("Qwen elimina adjuntos residuales antes de cargar el nuevo contexto", async
   writeFileSync(ruta, "contenido nuevo");
   const transporte = new TransporteArchivo();
   await new QwenEnvio(transporte as any, async () => {}).adjuntar([ruta]);
-  const indiceLimpieza = transporte.scripts.findIndex(x => x.includes('aria-label="Eliminar archivo"'));
+  const indiceLimpieza = transporte.scripts.findIndex(x => x.includes('aria-label*="Eliminar"'));
   const indiceCarga = transporte.scripts.findIndex(x => x.includes("new File"));
   expect(indiceLimpieza).toBeGreaterThanOrEqual(0);
   expect(indiceLimpieza).toBeLessThan(indiceCarga);
@@ -78,4 +78,16 @@ test("Qwen exige estabilidad antes de considerar listo el adjunto", async () => 
   await new QwenEnvio(transporte as any, async () => {}).adjuntar([ruta]);
   const sondeos = transporte.scripts.filter(x => x.includes("const texto = document.body.innerText"));
   expect(sondeos.length).toBeGreaterThanOrEqual(8);
+});
+
+
+test("Qwen conserva MIME real para imágenes", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "capi-qwen-image-"));
+  const ruta = join(dir, "captura.png");
+  writeFileSync(ruta, Buffer.from([137,80,78,71,13,10,26,10]));
+  const transporte = new TransporteArchivo();
+  await new QwenEnvio(transporte as any, async () => {}).adjuntar([ruta]);
+  const script = transporte.scripts.find(x => x.includes("new File")) ?? "";
+  expect(script).toContain("image/png");
+  expect(script).not.toContain("type:'text/plain'");
 });

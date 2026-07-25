@@ -78,3 +78,18 @@ La configuración exacta del cliente cambia entre Codex, Claude Code, OpenCode, 
 ## Seguridad
 
 CAPI no ejecuta comandos proporcionados por el modelo. Los adjuntos deben pasarse como rutas explícitas. No envíes credenciales, cookies, tokens ni secretos en prompts. Revisa los efectos declarados por `schema` antes de automatizar operaciones.
+
+## Agentes sin capacidad de visión
+
+CAPI funciona como delegado visual. Las imágenes se detectan por firma, se separan del contexto textual y se envían con su MIME real.
+
+```bash
+capi vision analizar captura.png --tipo descripcion --output json
+capi vision analizar factura.jpg --tipo ocr --output json
+capi vision analizar pantalla.webp --tipo ui --output json
+capi vision analizar arquitectura.png --tipo diagrama --output json
+capi vision analizar tabla.png --tipo tabla --output json
+capi vision comparar antes.png despues.png --output json
+```
+
+MCP expone `capi_vision_analyze` y `capi_vision_compare`; `capi_chat` acepta `images`. Las respuestas piden JSON válido con `incertidumbres`, por lo que el agente invocador puede razonar sin tener visión. Nunca conviertas la imagen a Base64 dentro del prompt. Qwen visual usa `preview` (Qwen3.8-Max-Preview) o `plus` (Qwen3.7-Plus); `max` (Qwen3.7-Max) es solo texto. DeepSeek solo participa con `vision`. Un nombre visible como Qwen 3.8 se reporta desde la página, mientras los aliases estables de CAPI siguen siendo `preview`, `max` y `plus`.

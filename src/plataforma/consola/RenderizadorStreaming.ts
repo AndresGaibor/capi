@@ -39,8 +39,23 @@ export class RenderizadorStreaming {
       return;
     }
 
+    if (evento.tipo === "imagen") {
+      process.stdout.write(`\n[Imagen generada: ${evento.alt ?? "sin descripción"}] ${evento.url}\n`);
+      return;
+    }
+
     if (evento.tipo === "fin") {
       process.stdout.write("\n");
+      return;
+    }
+
+    if (evento.tipo === "pausado") {
+      consola.warn(`${evento.motivo}${evento.conversacionId ? ` Conversación: ${evento.conversacionId}` : ""}`);
+      return;
+    }
+
+    if (evento.tipo === "error") {
+      consola.error(evento.mensaje);
     }
   }
 }

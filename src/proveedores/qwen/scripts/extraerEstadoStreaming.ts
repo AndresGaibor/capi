@@ -8,11 +8,27 @@ export function scriptExtraerEstadoStreamingQwen(): string {
           )
         : [];
 
-      const assistantMsgs = Array.from(messages).filter((m) =>
-        m.matches('.qwen-chat-message-assistant, [class*="assistant"], [class*="bot"]') ||
-        m.querySelector('.qwen-chat-message-assistant, [class*="assistant"], [class*="bot"]')
+      const allMessages = Array.from(messages);
+      var promptEsperado = '';
+      try { promptEsperado = sessionStorage.getItem('__capiQwenPrompt') || ''; } catch (_) {}
+      const huellaPrompt = promptEsperado.slice(0, 120).trim();
+      let indiceUsuario = -1;
+      if (huellaPrompt) {
+        for (let i = allMessages.length - 1; i >= 0; i--) {
+          const mensaje = allMessages[i];
+          const texto = (mensaje.innerText || mensaje.textContent || '').trim();
+          const esAsistente = mensaje.matches('.qwen-chat-message-assistant, [class*="assistant"], [class*="bot"]') ||
+            !!mensaje.querySelector('.qwen-chat-message-assistant, [class*="assistant"], [class*="bot"]');
+          if (!esAsistente && texto.includes(huellaPrompt)) { indiceUsuario = i; break; }
+        }
+      }
+      const assistantMsgs = allMessages.filter((m, i) =>
+        i > indiceUsuario && (
+          m.matches('.qwen-chat-message-assistant, [class*="assistant"], [class*="bot"]') ||
+          m.querySelector('.qwen-chat-message-assistant, [class*="assistant"], [class*="bot"]')
+        )
       );
-      const lastAssistant = assistantMsgs[assistantMsgs.length - 1];
+      const lastAssistant = assistantMsgs[assistantMsgs.length - 1] || null;
 
       var responseBoxes = lastAssistant
         ? Array.from(lastAssistant.querySelectorAll('.response-message-box'))
@@ -87,7 +103,7 @@ export function scriptExtraerEstadoStreamingQwen(): string {
       var done = isError || (
         responseText.length > 0 &&
         !isGenerating &&
-        !!actionToolbar
+        (!!actionToolbar || !stopControl)
       );
 
       return {

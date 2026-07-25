@@ -5,6 +5,7 @@ import type { TransporteNavegador } from "../../../plataforma/webbridge/Transpor
 import type { OpcionesDeepSeek } from "../tipos";
 import { scriptEnviarPromptDeepSeek } from "../scripts/enviarPrompt";
 import type { EstrategiaAdjuntos, ResultadoAdjuntos } from "../../../nucleo/archivos/EstrategiaAdjuntos";
+import { detectarTipoArchivo } from "../../../nucleo/archivos/DetectarTipoArchivo";
 
 const TAMANO_FRAGMENTO_BASE64 = 256 * 1024;
 
@@ -59,6 +60,8 @@ export class DeepSeekEnvio implements EstrategiaAdjuntos {
 
   private async adjuntarPorDom(ruta: string): Promise<void> {
     const nombre = basename(ruta);
+    const detectado = detectarTipoArchivo(ruta);
+    if (!detectado.soportado) throw new ErrorPaginaProveedor(`Archivo no soportado: ${nombre} (${detectado.motivo})`);
     const base64 = readFileSync(ruta).toString("base64");
     const clave = `__capiDeepSeekArchivo_${crypto.randomUUID().replaceAll("-", "")}`;
     await this.transporte.evaluar(`window[${JSON.stringify(clave)}]=[]`);
@@ -70,7 +73,7 @@ export class DeepSeekEnvio implements EstrategiaAdjuntos {
       if (!input) return {ok:false,error:'No se encontró el input de archivos de DeepSeek'};
       const binario = atob(window[${JSON.stringify(clave)}].join('')); delete window[${JSON.stringify(clave)}];
       const bytes = new Uint8Array(binario.length); for(let i=0;i<binario.length;i++) bytes[i]=binario.charCodeAt(i);
-      const archivo = new File([bytes], ${JSON.stringify(nombre)}, {type:'text/plain',lastModified:Date.now()});
+      const archivo = new File([bytes], ${JSON.stringify(nombre)}, {type:${JSON.stringify(detectado.mime)},lastModified:Date.now()});
       const transferencia = new DataTransfer(); transferencia.items.add(archivo);
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'files').set.call(input,transferencia.files);
       input.dispatchEvent(new Event('change',{bubbles:true}));
@@ -80,7 +83,7 @@ export class DeepSeekEnvio implements EstrategiaAdjuntos {
     for (let i=0;i<180;i++) {
       const estado = await this.transporte.evaluar<{visible:boolean;procesando:boolean;error:string}>(`(() => {
         const texto=document.body.innerText||''; return {
-          visible:texto.includes(${JSON.stringify(nombre.replace(/\.txt$/i,""))}),
+          visible:texto.includes(${JSON.stringify(nombre)}) || texto.includes(${JSON.stringify(nombre.replace(/\.[^.]+$/i,""))}) || [...document.images].some(i => (i.alt || '').includes(${JSON.stringify(nombre)})),
           procesando:/Uploading|Parsing(?: file)?|Pending|Analizando|Procesando/i.test(texto),
           error:[...document.querySelectorAll('[role="alert"],[class*="error"]')].map(e=>(e.innerText||'').trim()).filter(Boolean).at(-1)||''
         };
@@ -106,9 +109,16 @@ export class DeepSeekEnvio implements EstrategiaAdjuntos {
       } catch {
         await this.transporte.evaluar(`document.elementFromPoint(${x},${y})?.click()`);
       }
-    } else if (Number.isFinite(resultado.value.x) && Number.isFinite(resultado.value.y)) {
-      await this.transporte.evaluar(`document.elementFromPoint(${resultado.value.x},${resultado.value.y})?.click()`);
     }
+    await this.transporte.evaluar(`(() => {
+      const textarea = document.querySelector('textarea[name="search"]');
+      const compositor = textarea?.closest('form') || textarea?.parentElement?.parentElement?.parentElement || document;
+      const btn = [...compositor.querySelectorAll('div[role="button"], button')].find(b => {
+        const r = b.getBoundingClientRect(); const s = getComputedStyle(b);
+        return r.width > 0 && r.height > 0 && s.display !== 'none' && s.visibility !== 'hidden' && !b.disabled;
+      });
+      btn?.click();
+    })()`);
     for (let intento = 0; intento < 80; intento++) {
       const estado = await this.transporte.evaluar<{vacio:boolean;conversacionNueva:boolean}>(`(() => {
         const textarea = document.querySelector('textarea[name="search"]');

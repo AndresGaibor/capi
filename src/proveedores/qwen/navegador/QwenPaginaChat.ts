@@ -5,20 +5,24 @@ import { QwenEnvio } from "./QwenEnvio";
 import { QwenModelos } from "./QwenModelos";
 import { QwenNavegacion } from "./QwenNavegacion";
 import { QwenStreaming } from "./QwenStreaming";
+import { QwenConversaciones } from "./QwenConversaciones";
 import type { ResultadoAdjuntos } from "../../../nucleo/archivos/EstrategiaAdjuntos";
 import type { GestorPestanas } from "../../../plataforma/webbridge/GestorPestanas";
+import type { ResumenConversacionQwen } from "./QwenConversaciones";
 
 export class QwenPaginaChat {
   private readonly navegacion: QwenNavegacion;
   private readonly modelos: QwenModelos;
   private readonly envio: QwenEnvio;
   private readonly streaming: QwenStreaming;
+  private readonly conversaciones: QwenConversaciones;
 
   constructor(transporte: TransporteNavegador, gestorPestanas?: GestorPestanas) {
     this.navegacion = new QwenNavegacion(transporte, undefined, gestorPestanas);
     this.modelos = new QwenModelos(transporte);
     this.envio = new QwenEnvio(transporte);
     this.streaming = new QwenStreaming(transporte);
+    this.conversaciones = new QwenConversaciones(transporte);
   }
 
   verificarDisponibilidad(): Promise<void> { return this.navegacion.verificarDisponibilidad(); }
@@ -29,4 +33,5 @@ export class QwenPaginaChat {
   enviarPrompt(prompt: string): Promise<void> { return this.envio.enviar(prompt); }
   observarStreaming(): AsyncGenerator<EventoStreaming> { return this.streaming.observar(); }
   async obtenerConversacionActual(): Promise<string | null> { return this.navegacion.obtenerConversacionActual(); }
+  listarConversaciones(): Promise<ResumenConversacionQwen[]> { return this.conversaciones.listar(); }
 }

@@ -13,6 +13,11 @@ src/
   entradas/     CLI y composition root
 ```
 
+> 🤖 **Guías de navegación para agentes**: Consulta el mapa detallado en [`AGENTS.md`](file:///Users/andresgaibor/code/javascript/capi/AGENTS.md) o navega por capas:
+> - [`src/nucleo/AGENTS.md`](file:///Users/andresgaibor/code/javascript/capi/src/nucleo/AGENTS.md) | [`src/modulos/AGENTS.md`](file:///Users/andresgaibor/code/javascript/capi/src/modulos/AGENTS.md) | [`src/proveedores/AGENTS.md`](file:///Users/andresgaibor/code/javascript/capi/src/proveedores/AGENTS.md)
+> - [`src/plataforma/AGENTS.md`](file:///Users/andresgaibor/code/javascript/capi/src/plataforma/AGENTS.md) | [`src/entradas/AGENTS.md`](file:///Users/andresgaibor/code/javascript/capi/src/entradas/AGENTS.md) | [`test/AGENTS.md`](file:///Users/andresgaibor/code/javascript/capi/test/AGENTS.md)
+
+
 Los casos de uso no conocen selectores DOM, WebBridge ni proveedores concretos. El contexto local usa `bun:sqlite`, leases renovables y un límite atómico de tres ejecuciones simultáneas. Cada proveedor encapsula navegación, modelos, envío y streaming. DeepSeek también implementa sesión, conversaciones y mensajes. Para recuperar respuestas usa el DOM y, como respaldos, IndexedDB y la API autenticada de historial dentro de la propia pestaña; el token nunca sale del navegador ni se registra.
 
 ## Requisitos
@@ -136,3 +141,18 @@ La suite cubre contratos, casos de uso, composición, CLI, reglas arquitectónic
 - SQL solo existe en la plataforma de persistencia.
 - La ruta de origen de una conversación compartida no cambia al reutilizarla desde otra ruta vinculada.
 - Los errores transitorios de Qwen, incluida alta demanda, se detectan desde su bloque de alerta y no se confunden con respuestas vacías.
+
+## Imágenes y visión
+
+CAPI detecta PNG, JPEG, WebP y GIF por firma, incluso cuando la extensión es incorrecta. Las imágenes nunca se incluyen en el bundle textual: se adjuntan de forma nativa con MIME real.
+
+```bash
+bun run src/cli.ts chat --imagen captura.png -p qwen --output jsonl \
+  "Describe la imagen y devuelve texto visible e incertidumbres"
+bun run src/cli.ts vision analizar captura.png --tipo ui --output json
+bun run src/cli.ts vision comparar antes.png despues.png --output json
+```
+
+`--imagen` puede repetirse y también acepta coma, JSON o `@manifiesto`. Pasar una imagen mediante `-f` funciona igualmente porque CAPI separa automáticamente texto, imágenes y PDF. Qwen `preview` y `plus` tienen contrato visual; `max` es solo texto; el nombre visible real, por ejemplo `Qwen3.8-Max-Preview`, puede cambiar y se descubre desde la página. DeepSeek solo usa `vision` para imágenes y nunca degrada una solicitud visual a `default` o `expert`.
+
+Herramientas MCP adicionales: `capi_vision_analyze` y `capi_vision_compare`. Están diseñadas para agentes que no pueden analizar imágenes: solicitan JSON autosuficiente y conservan un arreglo de `incertidumbres`.

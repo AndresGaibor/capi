@@ -1,3 +1,5 @@
+import { CAPACIDADES_MULTIMODALES } from "../../../nucleo/proveedores/CapacidadesMultimodales";
+
 export interface EsquemaComandoAgente {
   name: string;
   description: string;
@@ -12,8 +14,8 @@ const comandos: EsquemaComandoAgente[] = [
   {
     name: "chat.send", description: "Enviar un prompt con contexto automático del proyecto, recuperación de modelo y bloqueo de concurrencia.",
     inputSchema: { type: "object", additionalProperties: false, required: ["prompt"], properties: {
-      prompt: { type: "string", minLength: 1 }, provider: { type: "string", enum: ["qwen", "deepseek"] }, model: { type: "string" }, conversationId: { type: "string" },
-      newConversation: { type: "boolean", default: false }, reasoning: { type: "boolean" }, webSearch: { type: "boolean" }, files: { type: "array", items: { type: "string" }, description: "Archivos, directorios o globs. CAPI los combina en un único .txt seguro." }, includeGitDiff: { type: "boolean", default: false }, automaticContext: { type: "boolean", default: false }, incrementalContext: { type: "boolean", default: false }, includeConversationSummary: { type: "boolean", default: false }, maxContextBytes: { type: "integer", minimum: 1024 }, bundleContext: { type: "boolean", default: true, description: "Combinar las fuentes en un único archivo antes de enviarlas." },
+       prompt: { type: "string", minLength: 1 }, provider: { type: "string", enum: ["qwen", "deepseek", "chatgpt"] }, model: { type: "string" }, conversationId: { type: "string" },
+       newConversation: { type: "boolean", default: false }, continue: { type: "boolean", default: false, description: "Consultar una respuesta pendiente sin enviar otro mensaje." }, reasoning: { type: "boolean" }, webSearch: { type: "boolean" }, files: { type: "array", items: { type: "string" }, description: "Archivos, directorios o globs. Los textuales se empaquetan; imágenes y PDF se adjuntan nativamente." }, images: { type: "array", items: { type: "string" }, description: "Imágenes PNG, JPEG, WebP o GIF; nunca se convierten a texto." }, includeGitDiff: { type: "boolean", default: false }, automaticContext: { type: "boolean", default: false }, incrementalContext: { type: "boolean", default: false }, includeConversationSummary: { type: "boolean", default: false }, maxContextBytes: { type: "integer", minimum: 1024 }, bundleContext: { type: "boolean", default: true, description: "Combinar las fuentes en un único archivo antes de enviarlas." },
       fallback: { type: "boolean", default: true }, timeoutMs: { type: "integer", minimum: 1000 }, dryRun: { type: "boolean", default: false }, explain: { type: "boolean", default: false }, output,
     } },
     behavior: { nonInteractive: true, streaming: true, idempotent: false, sideEffects: ["navega una pestaña", "envía un mensaje", "actualiza historial local"] },
@@ -53,7 +55,7 @@ const comandos: EsquemaComandoAgente[] = [
   },
   {
     name: "state.clean", description: "Limpiar selectivamente cache, snapshots, historial o resumenes.",
-    inputSchema: { type: "object", additionalProperties: false, required: ["layers","confirm"], properties: { layers:{type:"array",items:{type:"string"}},confirm:{type:"boolean"},output } },
+    inputSchema: { type: "object", additionalProperties: false, required: ["layers","confirm"], properties: { layers:{type:"array",items:{type:"string",enum:["cache","snapshots","historial","resumenes","ocupaciones"]}},confirm:{type:"boolean"},output } },
     behavior: { nonInteractive: true, streaming: false, idempotent: false, sideEffects: ["elimina estado local"] }, errors: [],
   },
   {
@@ -65,6 +67,16 @@ const comandos: EsquemaComandoAgente[] = [
     name: "state.import", description: "Importar y fusionar un export capi.project.v1.",
     inputSchema: { type: "object", additionalProperties: false, required: ["file","confirm"], properties: { file:{type:"string"},confirm:{type:"boolean"},output } },
     behavior: { nonInteractive: true, streaming: false, idempotent: true, sideEffects: ["fusiona estado local"] }, errors: [],
+  },
+  {
+    name: "vision.analyze", description: "Analizar una imagen con salida JSON autosuficiente para agentes sin visión.",
+    inputSchema: { type: "object", additionalProperties: false, required: ["image"], properties: { image:{type:"string"}, type:{type:"string",enum:["descripcion","ocr","ui","diagrama","tabla"],default:"descripcion"}, instruction:{type:"string"}, provider:{type:"string",enum:["qwen","deepseek"],default:"qwen"}, model:{type:"string"}, timeoutMs:{type:"integer",minimum:1000}, output } },
+    behavior: { nonInteractive: true, streaming: true, idempotent: false, sideEffects: ["adjunta una imagen", "envía un mensaje", "actualiza historial local"] }, errors: [{code:"MODELO_NO_DISPONIBLE",retryable:true,recovery:"Usa Qwen max/preview/plus o DeepSeek vision."}],
+  },
+  {
+    name: "vision.compare", description: "Comparar dos imágenes con diferencias, mejoras, regresiones e incertidumbres en JSON.",
+    inputSchema: { type: "object", additionalProperties: false, required: ["before","after"], properties: { before:{type:"string"},after:{type:"string"},instruction:{type:"string"},provider:{type:"string",enum:["qwen","deepseek"],default:"qwen"},model:{type:"string"},timeoutMs:{type:"integer",minimum:1000},output } },
+    behavior: { nonInteractive: true, streaming: true, idempotent: false, sideEffects: ["adjunta dos imágenes", "envía un mensaje", "actualiza historial local"] }, errors: [{code:"MODELO_NO_DISPONIBLE",retryable:true,recovery:"Usa un modelo con modalidad image."}],
   },
   {
     name: "project.current", description: "Obtener el proyecto detectado y sus preferencias.",
@@ -86,6 +98,11 @@ const comandos: EsquemaComandoAgente[] = [
     inputSchema: { type: "object", additionalProperties: false, required: [], properties: { output } },
     behavior: { nonInteractive: true, streaming: false, idempotent: true, sideEffects: [] }, errors: [],
   },
+  {
+    name: "tasks", description: "Consultar tareas de chat ejecutándose en segundo plano.",
+    inputSchema: { type: "object", additionalProperties: false, required: [], properties: { id: { type: "string" }, output } },
+    behavior: { nonInteractive: true, streaming: false, idempotent: true, sideEffects: [] }, errors: [],
+  },
 ];
 
 export function obtenerEsquemaComando(nombre: string): EsquemaComandoAgente | undefined { return comandos.find((c) => c.name === nombre); }
@@ -93,17 +110,19 @@ export function obtenerEsquemaComando(nombre: string): EsquemaComandoAgente | un
 export function obtenerManifestAgente() {
   return {
     protocol: "capi.agent.v1" as const,
-    version: "2.5.0",
+    version: "2.6.0",
     interfaces: ["cli", "mcp", "typescript-core"],
     outputFormats: ["human", "markdown", "json", "jsonl"],
     providers: [
-      { id: "qwen", models: ["preview", "max", "plus"], fallback: ["preview", "max", "plus"], files: true },
-      { id: "deepseek", models: ["expert", "vision", "default"], fallback: ["expert", "default"], fallbackRequiresNewConversation: true, files: true },
+      { id: "qwen", models: ["preview", "max", "plus"], visibleNames: ["Qwen3.8-Max-Preview", "Qwen3.7-Max", "Qwen3.7-Plus"], fallback: ["preview", "max", "plus"], files: true, vision: true, multimodal: CAPACIDADES_MULTIMODALES.filter(x => x.proveedor === "qwen") },
+      { id: "deepseek", models: ["expert", "vision", "default"], fallback: ["expert", "default"], visualFallback: ["vision"], fallbackRequiresNewConversation: true, files: true, vision: true, multimodal: CAPACIDADES_MULTIMODALES.filter(x => x.proveedor === "deepseek") },
+      { id: "chatgpt", models: ["auto"], fallback: [], files: true, vision: false, multimodal: [] },
     ],
     commands: comandos,
     exitCodes: { success: 0, generic: 1, timeout: 10, highDemand: 20, modelUnavailable: 21, browserSession: 30, providerPage: 40, webBridge: 50, providerUnavailable: 60 },
     skill: ".agents/skills/capi/SKILL.md",
     mcpCommand: "bun run src/mcp.ts",
+    multimodal: { imagesNeverBundledAsText: true, preferredVisualProvider: "qwen", imageInputFormats: ["image/png","image/jpeg","image/webp","image/gif"], documentInputFormats: ["application/pdf"], agentWithoutVisionMustDelegate: true },
     contextFiles: { bundleByDefault: true, format: "txt", defaultMaxBytes: "resolved-by-provider-model", cacheByContentHash: true, incrementalSnapshots: true, automaticSelection: true, persistentSummaries: true, excludesSecretsAndBinaries: true },
     conventions: { stdout: "solo datos solicitados", stderr: "diagnóstico humano", jsonl: "un evento por línea", ansiInStructuredOutput: false, nonInteractiveByDefault: true },
   };

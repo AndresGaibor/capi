@@ -1,0 +1,7 @@
+import { expect,test } from "bun:test";import{mkdtempSync,writeFileSync}from"node:fs";import{join}from"node:path";import{tmpdir}from"node:os";import{detectarTipoArchivo}from"../../src/nucleo/archivos/DetectarTipoArchivo";import{separarAdjuntosContexto}from"../../src/modulos/contexto/aplicacion/SepararAdjuntosContexto";
+const d=mkdtempSync(join(tmpdir(),"capi-mm-"));const f=(n:string,b:number[])=>{const p=join(d,n);writeFileSync(p,Buffer.from(b));return p};
+const png=f("a.bin",[137,80,78,71,13,10,26,10]);const jpg=f("b.bin",[255,216,255,224]);const webp=f("c.bin",[82,73,70,70,0,0,0,0,87,69,66,80]);const pdf=f("d.bin",[37,80,68,70,45]);const txt=join(d,"a.txt");writeFileSync(txt,"hola");
+test("detecta firmas multimedia",()=>{expect(detectarTipoArchivo(png).mime).toBe("image/png");expect(detectarTipoArchivo(jpg).mime).toBe("image/jpeg");expect(detectarTipoArchivo(webp).mime).toBe("image/webp");expect(detectarTipoArchivo(pdf).categoria).toBe("documento")});
+test("separa texto imagen y documento",()=>{const r=separarAdjuntosContexto([txt,png,pdf]);expect(r.textuales).toEqual([txt]);expect(r.imagenes).toEqual([png]);expect(r.documentos).toEqual([pdf]);expect(r.rechazados).toHaveLength(0)});
+
+test("conserva directorios y globs como contexto textual",()=>{const r=separarAdjuntosContexto([d,"src/**/*.ts"]);expect(r.textuales).toEqual([d,"src/**/*.ts"]);expect(r.rechazados).toHaveLength(0)});

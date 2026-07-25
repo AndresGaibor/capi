@@ -4,9 +4,12 @@ import { obtenerManifestAgente } from "../../src/entradas/cli/agente/ManifestAge
 
 test("CLI y manifiesto exponen contexto, historial y contratos", () => {
   const subcomandos = comandoPrincipal.subCommands as any;
+  expect(subcomandos?.vision).toBeDefined();
   expect(subcomandos?.contexto).toBeDefined();
   expect(subcomandos?.historial).toBeDefined();
   const nombres = obtenerManifestAgente().commands.map(c => c.name);
+  expect(nombres).toContain("vision.analyze");
+  expect(nombres).toContain("vision.compare");
   expect(nombres).toContain("context.explain");
   expect(nombres).toContain("history.list");
   expect(nombres).toContain("diagnostics.contracts");
