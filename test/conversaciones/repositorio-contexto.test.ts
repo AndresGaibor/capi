@@ -83,3 +83,16 @@ test("reutilizar una conversación compartida conserva su ruta de origen",()=>{
  expect(c.usadaEn).toBe(2000);
  repo.cerrar();
 });
+
+
+test("marca una sola conversación principal por proyecto y proveedor", () => {
+  const r = repo();
+  r.registrarProyecto({ id: "p1", rutaRaiz: "/a", nombre: "a", tipoDeteccion: "git" });
+  r.registrarConversacion({ id: "c1", proveedor: "qwen", proyectoLocalId: "p1" }, 1000);
+  r.registrarConversacion({ id: "c2", proveedor: "qwen", proyectoLocalId: "p1" }, 2000);
+  r.marcarConversacionPrincipal("c2", "qwen", "p1");
+  const conversaciones = r.listarConversacionesProyecto("p1");
+  expect(conversaciones.find((c) => c.id === "c1")?.principal).toBeFalse();
+  expect(conversaciones.find((c) => c.id === "c2")?.principal).toBeTrue();
+  r.cerrar();
+});

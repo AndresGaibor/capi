@@ -40,6 +40,13 @@ export class RepositorioConversaciones {
       .map((r: any) => ({ ...r, favorita: Boolean(r.favorita), archivada: Boolean(r.archivada), principal: Boolean(r.principal), ocupada: Boolean(r.ocupada) })) as ConversacionRegistrada[];
   }
 
+  marcarPrincipal(id: string, proveedor: string, proyectoLocalId: string): void {
+    this.db.transaction(() => {
+      this.db.query("UPDATE conversaciones SET principal=0 WHERE proyecto_local_id=? AND proveedor=?").run(proyectoLocalId, proveedor);
+      this.db.query("UPDATE conversaciones SET principal=1 WHERE id=? AND proveedor=? AND proyecto_local_id=?").run(id, proveedor, proyectoLocalId);
+    })();
+  }
+
   actualizarEstado(id: string, proveedor: string, cambios: { favorita?: boolean; archivada?: boolean; principal?: boolean }, proyectoLocalId?: string): void {
     this.db.transaction(() => {
       if (cambios.principal && proyectoLocalId) this.db.query("UPDATE conversaciones SET principal=0 WHERE proyecto_local_id=? AND proveedor=?").run(proyectoLocalId, proveedor);

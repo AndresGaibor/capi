@@ -76,6 +76,10 @@ export class RepositorioContextoSqlite {
     return this.conversaciones.listarProyecto(proyectoLocalId);
   }
 
+  marcarConversacionPrincipal(id: string, proveedor: string, proyectoLocalId: string): void {
+    this.conversaciones.marcarPrincipal(id, proveedor, proyectoLocalId);
+  }
+
   actualizarEstado(
     id: string,
     proveedor: string,

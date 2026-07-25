@@ -40,6 +40,7 @@ export class RegistroChatHistorial {
         },
         ahora?: number,
       ) => void;
+      marcarConversacionPrincipal: (id: string, proveedor: string, proyectoLocalId: string) => void;
       guardarSnapshotContexto: (
         proyectoLocalId: string,
         proveedor: string,
@@ -103,6 +104,7 @@ export class RegistroChatHistorial {
     paquete?: { archivos?: Array<{ ruta: string; hash: string }> };
     prompt: string;
     respuesta: string;
+    hacerPrincipal?: boolean;
   }): void {
     this.repositorio.registrarConversacion({
       id: datos.conversacionId,
@@ -110,6 +112,14 @@ export class RegistroChatHistorial {
       proyectoLocalId: datos.proyectoId,
       modelo: datos.modelo,
     });
+
+    if (datos.hacerPrincipal) {
+      this.repositorio.marcarConversacionPrincipal(
+        datos.conversacionId,
+        datos.proveedorId,
+        datos.proyectoId,
+      );
+    }
 
     if (datos.paquete?.archivos?.length) {
       this.repositorio.guardarSnapshotContexto(

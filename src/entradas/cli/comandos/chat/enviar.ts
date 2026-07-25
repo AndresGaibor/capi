@@ -50,6 +50,15 @@ export const argumentosChat = {
 };
 
 const formatos = new Set(["human", "markdown", "json", "jsonl"]);
+export function resolverConversacionParaChat(entrada: {
+  explicita?: string;
+  persistida?: string;
+  forzarNueva: boolean;
+}): string | undefined {
+  if (entrada.forzarNueva) return undefined;
+  return entrada.explicita ?? entrada.persistida;
+}
+
 
 export function recogerImagenesArgumentos(args: Record<string, unknown>, argv = process.argv.slice(2)): string[] {
   const valores: string[] = [];
@@ -88,14 +97,13 @@ export async function ejecutarChat(args: Record<string, unknown>): Promise<void>
   if (!continuar && !prompt) throw new Error("Debes proporcionar un prompt. Usa --continuar para consultar una respuesta pendiente.");
   if (args.nueva && (args.conversacion || continuar)) throw new Error("--nueva no se puede combinar con --conversacion ni --continuar.");
   if (continuar && (prompt || args.nueva || args.archivo || args.imagen)) throw new Error("--continuar solo hace polling: no acepta prompt, archivos, imágenes ni --nueva.");
-  let conversacionId = args.conversacion ? normalizarConversacionId(String(args.conversacion)) : undefined;
-  if (!args.dryRun && !args.nueva && !conversacionId) {
-    const proveedorActual = app.proveedores.obtener(proveedor);
-    conversacionId = proveedorActual.obtenerConversacionActual
-      ? (await proveedorActual.obtenerConversacionActual()) ?? undefined
-      : undefined;
-  }
-  const seleccion = app.gestorContexto.seleccionar(proveedor, conversacionId).seleccion;
+  const conversacionExplicita = args.conversacion ? normalizarConversacionId(String(args.conversacion)) : undefined;
+  const seleccion = app.gestorContexto.seleccionar(proveedor, conversacionExplicita).seleccion;
+  const conversacionId = resolverConversacionParaChat({
+    explicita: conversacionExplicita,
+    persistida: seleccion.conversacionId,
+    forzarNueva: Boolean(args.nueva),
+  });
   const imagenes = continuar ? [] : recogerImagenesArgumentos(args);
 
   if (continuar && !conversacionId) throw new Error("No se encontró una conversación activa. Usa --conversacion URL_O_ID.");

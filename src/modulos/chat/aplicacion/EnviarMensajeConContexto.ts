@@ -156,6 +156,7 @@ export class EnviarMensajeConContexto {
           paquete: paquete ? { archivos: paquete.archivos } : undefined,
           prompt: peticion.prompt,
           respuesta,
+          hacerPrincipal: peticion.forzarNueva === true,
         });
       }
     } catch (error) {

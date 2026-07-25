@@ -7,6 +7,7 @@ describe("RegistroChatHistorial", () => {
       iniciarEjecucionHistorial: vi.fn(),
       finalizarEjecucionHistorial: vi.fn(),
       registrarConversacion: vi.fn(),
+      marcarConversacionPrincipal: vi.fn(),
       guardarSnapshotContexto: vi.fn(),
       registrarAdjuntosConfirmados: vi.fn(),
       obtenerResumenConversacion: vi.fn().mockReturnValue(null),
@@ -41,6 +42,7 @@ describe("RegistroChatHistorial", () => {
       iniciarEjecucionHistorial: vi.fn(),
       finalizarEjecucionHistorial: vi.fn(),
       registrarConversacion: vi.fn(),
+      marcarConversacionPrincipal: vi.fn(),
       guardarSnapshotContexto: vi.fn(),
       registrarAdjuntosConfirmados: vi.fn(),
       obtenerResumenConversacion: vi.fn().mockReturnValue(null),
@@ -70,6 +72,7 @@ describe("RegistroChatHistorial", () => {
       iniciarEjecucionHistorial: vi.fn(),
       finalizarEjecucionHistorial: vi.fn(),
       registrarConversacion: vi.fn(),
+      marcarConversacionPrincipal: vi.fn(),
       guardarSnapshotContexto: vi.fn(),
       registrarAdjuntosConfirmados: vi.fn(),
       obtenerResumenConversacion: vi.fn().mockReturnValue(null),
@@ -95,6 +98,7 @@ describe("RegistroChatHistorial", () => {
       iniciarEjecucionHistorial: vi.fn(),
       finalizarEjecucionHistorial: vi.fn(),
       registrarConversacion: vi.fn(),
+      marcarConversacionPrincipal: vi.fn(),
       guardarSnapshotContexto: vi.fn(),
       registrarAdjuntosConfirmados: vi.fn(),
       obtenerResumenConversacion: vi.fn().mockReturnValue(null),
@@ -125,6 +129,7 @@ describe("RegistroChatHistorial", () => {
       iniciarEjecucionHistorial: vi.fn(),
       finalizarEjecucionHistorial: vi.fn(),
       registrarConversacion: vi.fn(),
+      marcarConversacionPrincipal: vi.fn(),
       guardarSnapshotContexto: vi.fn(),
       registrarAdjuntosConfirmados: vi.fn(),
       obtenerResumenConversacion: vi.fn().mockReturnValue(null),
@@ -147,4 +152,28 @@ describe("RegistroChatHistorial", () => {
     expect(call[1]!.estado).toBe("fallida");
     expect(call[1]!.error).toBe("timeout");
   });
+
+
+  test("promueve la conversación creada cuando hacerPrincipal es true", () => {
+    const mockRepo = {
+      iniciarEjecucionHistorial: vi.fn(),
+      finalizarEjecucionHistorial: vi.fn(),
+      registrarConversacion: vi.fn(),
+      marcarConversacionPrincipal: vi.fn(),
+      guardarSnapshotContexto: vi.fn(),
+      registrarAdjuntosConfirmados: vi.fn(),
+      obtenerResumenConversacion: vi.fn().mockReturnValue(null),
+      guardarResumenConversacion: vi.fn(),
+    };
+    const registro = new RegistroChatHistorial(mockRepo);
+
+    registro.registrarConversacionYAdjuntos({
+      conversacionId: "c2", proyectoId: "p1", proveedorId: "qwen",
+      archivos: [], adjuntosNativos: [], prompt: "nuevo", respuesta: "ok",
+      hacerPrincipal: true,
+    });
+
+    expect(mockRepo.marcarConversacionPrincipal).toHaveBeenCalledWith("c2", "qwen", "p1");
+  });
+
 });
