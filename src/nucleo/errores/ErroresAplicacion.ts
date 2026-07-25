@@ -25,3 +25,6 @@ export class ErrorRespuestaVacia extends ErrorAplicacion {
 export class ErrorPaginaProveedor extends ErrorAplicacion {
   constructor(mensaje: string) { super(mensaje, "PAGINA_PROVEEDOR"); }
 }
+export class ErrorPreflightProveedor extends ErrorAplicacion {
+  constructor(codigo: "SESION_EXPIRADA" | "CAPTCHA_REQUERIDO" | "CONVERSACION_INVALIDA" | "PAGINA_NO_COMPATIBLE" | "SELECTOR_NO_ENCONTRADO" | "PROVEEDOR_OCUPADO", mensaje: string) { super(mensaje, codigo); }
+}

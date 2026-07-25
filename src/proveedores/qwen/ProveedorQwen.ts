@@ -44,4 +44,5 @@ export class ProveedorQwen implements ProveedorChat {
     yield* this.pagina.observarStreaming();
   }
   obtenerConversacionActual(): Promise<string | null> { return this.pagina.obtenerConversacionActual(); }
+  diagnosticarPagina(): Promise<Record<string, unknown>> { return this.pagina.diagnosticar(); }
 }

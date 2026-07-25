@@ -2,9 +2,10 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { ejecutarProcesoConTimeout } from "./lib/ejecutarProcesoConTimeout";
+import { crearMarcadorSmoke, evaluarSmoke } from "./lib/smokeDeterminista";
 
 const proveedor = (process.argv[2] ?? "qwen") as "qwen" | "deepseek";
-const marcador = `CAPI_VISION_${crypto.randomUUID().replaceAll("-", "").slice(0, 10).toUpperCase()}`;
+const marcador = crearMarcadorSmoke("VISION");
 const dir = mkdtempSync(join(tmpdir(), "capi-smoke-vision-"));
 const svg = join(dir, "marcador.svg");
 const png = join(dir, "marcador.png");
@@ -22,8 +23,4 @@ const argumentos = [
   "Lee el texto grande visible en la imagen y responde solamente con el marcador exacto, sin comillas ni explicación.",
 ];
 const resultado = await ejecutarProcesoConTimeout(argumentos, timeout, { CAPI_WEBBRIDGE_SESSION: `capi-vision-${crypto.randomUUID()}` });
-process.stdout.write(resultado.stdout);
-process.stderr.write(resultado.stderr);
-if (resultado.timeout) throw new Error(`Smoke visual ${proveedor} excedió ${timeout} ms`);
-if (resultado.exitCode !== 0 || !resultado.stdout.includes(marcador)) throw new Error(`Smoke visual ${proveedor} no devolvió ${marcador}`);
-console.log(JSON.stringify({ ok: true, proveedor, modelo, marcador }));
+console.log(JSON.stringify({ ...evaluarSmoke(proveedor, marcador, resultado), modelo }));

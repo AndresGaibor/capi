@@ -34,6 +34,6 @@ export class ProveedorDeepSeek implements ProveedorChat {
   listarConversaciones(): Promise<ConversacionResumen[]> { return this.conversaciones.listar(); }
   obtenerMensajes(id: string): Promise<ConversacionChat | null> { return this.conversaciones.mensajes(id); }
   async importarSesion(): Promise<void> { await this.sesion.importar(); }
-  async diagnosticarPagina(): Promise<Record<string, unknown>> { await this.verificarDisponibilidad(); return { proveedor: this.id, modelo: await this.pagina.modeloActual(), conversacionId: await this.pagina.obtenerConversacionActual() }; }
+  diagnosticarPagina(): Promise<Record<string, unknown>> { return this.pagina.diagnosticar(); }
   obtenerConversacionActual(): Promise<string | null> { return this.pagina.obtenerConversacionActual(); }
 }

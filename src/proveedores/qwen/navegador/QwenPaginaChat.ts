@@ -9,8 +9,10 @@ import { QwenConversaciones } from "./QwenConversaciones";
 import type { ResultadoAdjuntos } from "../../../nucleo/archivos/EstrategiaAdjuntos";
 import type { GestorPestanas } from "../../../plataforma/webbridge/GestorPestanas";
 import type { ResumenConversacionQwen } from "./QwenConversaciones";
+import { scriptDiagnosticarPagina } from "../../preflight/scriptDiagnosticarPagina";
 
 export class QwenPaginaChat {
+  private readonly transporte: TransporteNavegador;
   private readonly navegacion: QwenNavegacion;
   private readonly modelos: QwenModelos;
   private readonly envio: QwenEnvio;
@@ -18,6 +20,7 @@ export class QwenPaginaChat {
   private readonly conversaciones: QwenConversaciones;
 
   constructor(transporte: TransporteNavegador, gestorPestanas?: GestorPestanas) {
+    this.transporte = transporte;
     this.navegacion = new QwenNavegacion(transporte, undefined, gestorPestanas);
     this.modelos = new QwenModelos(transporte);
     this.envio = new QwenEnvio(transporte);
@@ -34,4 +37,5 @@ export class QwenPaginaChat {
   observarStreaming(): AsyncGenerator<EventoStreaming> { return this.streaming.observar(); }
   async obtenerConversacionActual(): Promise<string | null> { return this.navegacion.obtenerConversacionActual(); }
   listarConversaciones(): Promise<ResumenConversacionQwen[]> { return this.conversaciones.listar(); }
+  async diagnosticar(): Promise<Record<string, unknown>> { return (await this.transporte.evaluar<Record<string, unknown>>(scriptDiagnosticarPagina("qwen"))).value ?? { proveedor: "qwen", ok: false, codigo: "PAGINA_NO_COMPATIBLE" }; }
 }
