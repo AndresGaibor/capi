@@ -6,7 +6,7 @@ export class LectorTelemetriaQwen {
   constructor(private readonly transporte:TransporteNavegador,private readonly ahora:()=>number=Date.now){}
   async leer(conversacionEsperada?:string):Promise<LecturaTelemetriaQwen>{
     try{
-      const v=(await this.transporte.evaluar<unknown>('window.__CAPI_QWEN_BRIDGE__ ?? null')).value as Partial<TelemetriaQwenV2>|null;
+      const v=(await this.transporte.evaluar<unknown>(`(()=>{const directo=window.__CAPI_QWEN_BRIDGE__;if(directo)return directo;const crudo=document.documentElement.dataset.capiQwenBridge;if(!crudo)return null;try{return JSON.parse(crudo)}catch{return null}})()`)).value as Partial<TelemetriaQwenV2>|null;
       if(!v)return{disponible:false,saludable:false,atrasada:false,motivo:'ausente'};
       if(v.version!==2||v.proveedor!=='qwen'||typeof v.actualizadoEn!=='number'||typeof v.firmaEstado!=='string')return{disponible:true,saludable:false,atrasada:false,motivo:'incompatible'};
       if(conversacionEsperada&&v.conversacionId&&v.conversacionId!==conversacionEsperada)return{disponible:true,saludable:false,atrasada:false,motivo:'conversacion_distinta'};
