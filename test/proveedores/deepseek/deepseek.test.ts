@@ -3,6 +3,8 @@ import { JSDOM } from "jsdom";
 import { scriptEnviarPromptDeepSeek } from "../../../src/proveedores/deepseek/scripts/enviarPrompt";
 import { resolverModeloDeepSeek, listarModelosDeepSeek } from "../../../src/proveedores/deepseek/modelos/ResolverModeloDeepSeek";
 import { convertirRegistroHistoria } from "../../../src/proveedores/deepseek/servicios/ConvertirRegistroHistoria";
+import { respuestaPosteriorAlUltimoUsuario } from "../../../src/proveedores/deepseek/servicios/CorrelacionarTurnoDeepSeek";
+import { scriptRespuestaHistorialDeepSeek } from "../../../src/proveedores/deepseek/scripts/respuestaHistorial";
 
 describe("DeepSeek", () => {
   test("valida modelos", () => { expect(resolverModeloDeepSeek("VISION")).toBe("vision"); expect(listarModelosDeepSeek()).toHaveLength(3); expect(() => resolverModeloDeepSeek("otro")).toThrow("Modelo no disponible"); });
@@ -66,10 +68,11 @@ test("DeepSeek consulta el historial autenticado como respaldo", async () => {
   };
   const eventos = [];
   for await (const evento of new DeepSeekStreaming(transporte, async () => {}).observar()) eventos.push(evento);
-  expect(consultas).toBeGreaterThan(0);
+  expect(consultas).toBeGreaterThanOrEqual(2);
   expect(eventos).toContainEqual({ tipo: "respuesta", contenido: "RESPUESTA_API", estrategia: "historial" });
   expect(eventos.at(-1)).toEqual({ tipo: "fin" });
-  expect(scripts.some(x => x.includes("Authorization: 'Bearer ' + token"))).toBeTrue();
+  expect(scripts.some(x => x.includes("Authorization:'Bearer '+token"))).toBeTrue();
+  expect(scripts.some(x => x.includes("ultimoUsuario"))).toBeTrue();
 });
 
 
@@ -95,4 +98,26 @@ test("DeepSeek prepara prompt en editor contenteditable",()=>{
   const resultado=dom.window.eval(scriptEnviarPromptDeepSeek("hola")) as any;
   expect(resultado.ok).toBeTrue();
   expect(dom.window.document.querySelector('[contenteditable]')?.textContent).toBe("hola");
+});
+
+
+test("DeepSeek solo acepta un asistente posterior al último usuario", () => {
+  expect(respuestaPosteriorAlUltimoUsuario([
+    { rol: "usuario", contenido: "anterior" },
+    { rol: "asistente", contenido: "RESPUESTA_ANTIGUA", terminado: true },
+    { rol: "usuario", contenido: "actual" },
+  ])).toEqual({ contenido: "", terminado: false });
+  expect(respuestaPosteriorAlUltimoUsuario([
+    { rol: "usuario", contenido: "anterior" },
+    { rol: "asistente", contenido: "RESPUESTA_ANTIGUA", terminado: true },
+    { rol: "usuario", contenido: "actual" },
+    { rol: "asistente", contenido: "RESPUESTA_ACTUAL", terminado: true },
+  ])).toEqual({ contenido: "RESPUESTA_ACTUAL", terminado: true });
+});
+
+test("script de historial DeepSeek correlaciona desde el último usuario", () => {
+  const script = scriptRespuestaHistorialDeepSeek("conv-1");
+  expect(script).toContain("ultimoUsuario");
+  expect(script).toContain("mensajes.slice(ultimoUsuario+1)");
+  expect(() => new Function(`return (${script})`)).not.toThrow();
 });

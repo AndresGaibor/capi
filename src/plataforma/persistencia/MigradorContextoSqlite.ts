@@ -2,7 +2,21 @@ import type { Database } from "bun:sqlite";
 
 export const ESQUEMA_CONTEXTO = 12;
 
+function nombresColumnas(db: Database, tabla: string): Set<string> {
+  return new Set((db.query(`PRAGMA table_info(${tabla})`).all() as Array<{ name: string }>).map((columna) => columna.name));
+}
+
+function esquemaActualCompleto(db: Database): boolean {
+  const version = (db.query("PRAGMA user_version").get() as { user_version?: number } | null)?.user_version ?? 0;
+  if (version !== ESQUEMA_CONTEXTO) return false;
+  const conversaciones = nombresColumnas(db, "conversaciones");
+  const ejecuciones = nombresColumnas(db, "ejecuciones_chat_activas");
+  return ["estado_salud", "motivo_salud", "fecha_salud"].every((nombre) => conversaciones.has(nombre))
+    && ["pid", "hostname", "boot_id", "modo", "comando_json", "ultima_secuencia"].every((nombre) => ejecuciones.has(nombre));
+}
+
 export function migrarContextoSqlite(db: Database): void {
+  if (esquemaActualCompleto(db)) return;
   db.exec(`
     CREATE TABLE IF NOT EXISTS proyectos_locales (id TEXT PRIMARY KEY, ruta_raiz TEXT NOT NULL UNIQUE, nombre TEXT NOT NULL, tipo_deteccion TEXT NOT NULL, usado_en INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS proyectos_logicos (id TEXT PRIMARY KEY, alias TEXT NOT NULL UNIQUE);
@@ -22,17 +36,17 @@ export function migrarContextoSqlite(db: Database): void {
     CREATE INDEX IF NOT EXISTS idx_ejecuciones_estado_actualizada ON ejecuciones_chat_activas(estado,actualizada_en);
     CREATE INDEX IF NOT EXISTS idx_eventos_ejecucion_fecha ON eventos_ejecucion_chat(ejecucion_id,creado_en);
     CREATE INDEX IF NOT EXISTS idx_envios_actualizado ON envios_idempotentes(actualizado_en);
-    PRAGMA user_version=${ESQUEMA_CONTEXTO};
   `);
-  const columnas = db.query("PRAGMA table_info(conversaciones)").all() as Array<{ name: string }>;
+  const columnas = [...nombresColumnas(db, "conversaciones")].map((name) => ({ name }));
   if (!columnas.some((columna) => columna.name === "estado_salud"))
     db.exec("ALTER TABLE conversaciones ADD COLUMN estado_salud TEXT NOT NULL DEFAULT 'activa'");
   if (!columnas.some((columna) => columna.name === "motivo_salud"))
     db.exec("ALTER TABLE conversaciones ADD COLUMN motivo_salud TEXT");
   if (!columnas.some((columna) => columna.name === "fecha_salud"))
     db.exec("ALTER TABLE conversaciones ADD COLUMN fecha_salud INTEGER");
-  const columnasEjecucion = db.query("PRAGMA table_info(ejecuciones_chat_activas)").all() as Array<{ name: string }>;
+  const columnasEjecucion = [...nombresColumnas(db, "ejecuciones_chat_activas")].map((name) => ({ name }));
   const extras: Array<[string,string]> = [["pid","INTEGER"],["hostname","TEXT"],["boot_id","TEXT"],["modo","TEXT NOT NULL DEFAULT 'foreground'"],["comando_json","TEXT"],["ultima_secuencia","INTEGER NOT NULL DEFAULT 0"]];
   for (const [nombre,tipo] of extras) if (!columnasEjecucion.some(c=>c.name===nombre)) db.exec(`ALTER TABLE ejecuciones_chat_activas ADD COLUMN ${nombre} ${tipo}`);
+  db.exec(`PRAGMA user_version=${ESQUEMA_CONTEXTO};`);
 
 }

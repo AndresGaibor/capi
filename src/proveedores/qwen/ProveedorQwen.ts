@@ -31,6 +31,10 @@ export class ProveedorQwen implements ProveedorChat {
       yield { tipo: "modelo", nombre: modelo.nombre };
     }
     if (!peticion.soloPoll) {
+      if (peticion.opciones?.razonamiento !== undefined) {
+        yield { tipo: "inicio", mensaje: `Configurando modo ${peticion.opciones.razonamiento ? "Thinking" : "Fast"}...` };
+        await this.pagina.configurarRazonamiento(peticion.opciones.razonamiento);
+      }
       if (peticion.archivos?.length) {
         yield { tipo: "inicio", mensaje: `Adjuntando ${peticion.archivos.length} archivo(s)...` };
         await this.pagina.adjuntar(peticion.archivos);

@@ -1,6 +1,8 @@
+import { extraerRespuestaSnapshotQwen } from "../../../src/proveedores/qwen/navegador/ExtraerRespuestaSnapshotQwen";
 import { expect, test } from "bun:test";
 import { QwenStreaming } from "../../../src/proveedores/qwen/navegador/QwenStreaming";
 import { ProveedorQwen } from "../../../src/proveedores/qwen/ProveedorQwen";
+import { scriptRespuestaHistorialQwen, scriptConfirmarPromptHistorialQwen } from "../../../src/proveedores/qwen/scripts/respuestaHistorial";
 
 async function recoger(gen: AsyncGenerator<any>, max = 20) {
   const eventos: any[] = [];
@@ -66,4 +68,109 @@ test("Qwen sobrevive veinte fallos, recupera pestaña y continúa", async () => 
   expect(recuperaciones).toBeGreaterThan(0);
   expect(eventos.find(e=>e.tipo==="respuesta")?.contenido).toBe("RECUPERADA");
   expect(eventos.some(e=>e.tipo==="pausado")).toBeFalse();
+});
+
+test('snapshot Qwen ignora anuncios accesibles y controles de interfaz', () => {
+  const tree = { role:'main', children:[
+    {role:'StaticText',name:'Pensamiento completado'},
+    {role:'StaticText',name:'Acknowledging the signal received'},
+    {role:'StaticText',name:'Saltar'},
+    {role:'button',name:'Copiar'}
+  ]};
+  expect(extraerRespuestaSnapshotQwen(tree)).toBe('');
+});
+
+test('Qwen no consulta snapshot mientras la generación sigue activa', async()=>{
+  let snapshots=0; let paso=0;
+  const transporte:any={
+    async evaluar(c:string){
+      if(c.includes('__CAPI_QWEN_BRIDGE__')) return {value:null};
+      if(c==='location.href') return {value:'https://chat.qwen.ai/c/activa'};
+      paso++;
+      return {value: paso<3?{think:'Pensamiento completado',response:'',done:false,isGenerating:true,isAssistant:true,isError:false,errorMessage:''}:{think:'',response:'FINAL',done:true,isGenerating:false,isAssistant:true,isError:false,errorMessage:'',extractionStrategy:'semantic'}};
+    },
+    async snapshotAccesibilidad(){snapshots++;return{tree:{role:'main'}}}
+  };
+  const pausas=async()=>{}; let ahora=0;
+  const eventos=[]; for await(const e of new QwenStreaming(transporte,pausas,()=>{ahora+=3000;return ahora}).observar()) eventos.push(e);
+  expect(snapshots).toBe(0);
+  expect(eventos.some((e:any)=>e.tipo==='respuesta'&&e.contenido==='FINAL')).toBeTrue();
+});
+
+test('Qwen marca requiere_usuario cuando termina pensamiento sin respuesta', async()=>{
+  let ahora=0;
+  const transporte:any={
+    async evaluar(c:string){
+      if(c.includes('__CAPI_QWEN_BRIDGE__')) return {value:null};
+      if(c==='location.href') return {value:'https://chat.qwen.ai/c/vacia'};
+      return {value:{think:'Pensamiento completado',response:'',done:false,isGenerating:false,isAssistant:true,isError:false,errorMessage:''}};
+    },
+    async snapshotAccesibilidad(){return{tree:{role:'main',children:[{role:'StaticText',name:'Pensamiento completado'},{role:'button',name:'Copiar'}]}}}
+  };
+  const eventos=[]; for await(const e of new QwenStreaming(transporte,async()=>{},()=>{ahora+=6000;return ahora}).observar()) eventos.push(e);
+  expect(eventos.at(-1)).toMatchObject({tipo:'estado',estado:'requiere_usuario'});
+});
+
+
+test("Qwen regenera una sola vez un turno vacío sin reenviar el prompt", async()=>{
+  let ahora=0,lecturas=0,clicks=0,snapshots=0;
+  const transporte:any={
+    async evaluar(c:string){
+      if(c.includes('__CAPI_QWEN_BRIDGE__')) return {value:null};
+      if(c==='location.href') return {value:'https://chat.qwen.ai/c/regenerada'};
+      if(c.includes("fetch('/api/v2/chats/")) return {value:{contenido:'',pensamiento:'',terminado:false}};
+      if(c.includes('const turnos=[...document.querySelectorAll')){clicks++;return{value:true}}
+      lecturas++;
+      if(lecturas<=4)return{value:{think:'Pensamiento completado',response:'',done:false,isGenerating:false,isAssistant:true,isError:false,errorMessage:'',canRegenerate:true,hasSemanticResponse:true,turnoId:'t1'}};
+      return{value:{think:'',response:'RESPUESTA_REGENERADA',done:true,isGenerating:false,isAssistant:true,isError:false,errorMessage:'',canRegenerate:true,hasSemanticResponse:true,turnoId:'t2',extractionStrategy:'semantic'}};
+    },
+    async snapshotAccesibilidad(){snapshots++;return{tree:{role:'main'}}}
+  };
+  const eventos=[];for await(const e of new QwenStreaming(transporte,async()=>{},()=>{ahora+=3000;return ahora}).observar())eventos.push(e);
+  expect(clicks).toBe(1);
+  expect(snapshots).toBe(0);
+  expect(eventos).toContainEqual(expect.objectContaining({tipo:'estado',detalles:'respuesta_vacia_regenerada'}));
+  expect(eventos).toContainEqual(expect.objectContaining({tipo:'respuesta',contenido:'RESPUESTA_REGENERADA'}));
+  expect(eventos.at(-1)?.tipo).toBe('fin');
+});
+
+
+test("Qwen recupera una pestaña cerrada usando el UUID ya conocido",async()=>{
+  const recuperaciones:Array<string|undefined>=[];
+  const transporte:any={
+    async evaluar(){throw new Error("pestaña cerrada")},
+    async recuperarPestana(_host:string,url?:string){recuperaciones.push(url);return true},
+  };
+  const generador=(new QwenStreaming(transporte,async()=>{},()=>Date.now()) as any).observar("CONVERSACION_CONOCIDA");
+  const primero=await generador.next();
+  expect(primero.value).toMatchObject({tipo:"estado",estado:"desconectado"});
+  await generador.next();
+  expect(recuperaciones[0]).toBe("https://chat.qwen.ai/c/CONVERSACION_CONOCIDA");
+  await generador.return(undefined);
+});
+
+test("Qwen recupera respuesta final desde historial cuando el DOM está vacío",async()=>{
+ let ahora=0,consultas=0;
+ const transporte:any={
+  async evaluar(c:string){
+   if(c.includes("fetch('/api/v2/chats/")){consultas++;return{value:{contenido:"RESPUESTA_HISTORIAL_QWEN",pensamiento:"",terminado:true,modelo:"Qwen3.7-Plus",turnoId:"a1"}}}
+   if(c.includes('__CAPI_QWEN_BRIDGE__'))return{value:null};
+   if(c==='location.href')return{value:'https://chat.qwen.ai/c/historial'};
+   return{value:{think:'',response:'',done:false,isGenerating:false,isAssistant:true,isError:false,errorMessage:'',hasSemanticResponse:true}};
+  }
+ };
+ const eventos=[];for await(const e of new QwenStreaming(transporte,async()=>{},()=>{ahora+=3000;return ahora}).observar())eventos.push(e);
+ expect(consultas).toBeGreaterThan(0);
+ expect(eventos).toContainEqual(expect.objectContaining({tipo:'respuesta',contenido:'RESPUESTA_HISTORIAL_QWEN',estrategia:'historial'}));
+ expect(eventos.at(-1)?.tipo).toBe('fin');
+});
+
+test("scripts de historial Qwen correlacionan después del último usuario",()=>{
+ const respuesta=scriptRespuestaHistorialQwen('c1');
+ const confirmacion=scriptConfirmarPromptHistorialQwen('c1','MARCADOR');
+ expect(respuesta).toContain("mensajes.slice(ultimoUsuario+1)");
+ expect(respuesta).toContain("content_list");
+ expect(confirmacion).toContain("role||''");
+ expect(()=>new Function(`return (${respuesta})`)).not.toThrow();
+ expect(()=>new Function(`return (${confirmacion})`)).not.toThrow();
 });

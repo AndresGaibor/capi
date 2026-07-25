@@ -20,7 +20,7 @@ export class RegistroChatHistorial {
       finalizarEjecucionHistorial: (
         id: string,
         entrada: {
-          estado: "completada" | "pausada" | "fallida";
+          estado: "completada" | "pausada" | "cancelada" | "fallida";
           conversacionId?: string;
           modelo?: string;
           contextoHash?: string;
@@ -174,7 +174,7 @@ export class RegistroChatHistorial {
 
   finalizar(datos: {
     historialId: string;
-    estado: "completada" | "pausada" | "fallida";
+    estado: "completada" | "pausada" | "cancelada" | "fallida";
     conversacionId?: string;
     modelo?: string;
     contextoHash?: string;

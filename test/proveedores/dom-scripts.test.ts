@@ -41,3 +41,40 @@ test("Qwen A/B extrae contenido real y marca elección requerida",()=>{
  const html=`<main><div class="qwen-chat-message qwen-chat-message-user">AB_PROMPT</div><div class="qwen-chat-message qwen-chat-message-assistant"><div class="smulti-o-response-message"><div class="response-message-box"><div class="smulti-o-header">Respuesta 1</div><div class="response-message-content phase-answer">PRIMERA REAL</div><button class="smulti-make-better">Prefiero esta respuesta</button></div><div class="response-message-box"><div class="smulti-o-header">Respuesta 2</div><div class="response-message-content phase-answer">SEGUNDA REAL</div><button class="smulti-make-better">Prefiero esta respuesta</button></div></div></div></main><textarea class="message-input-textarea"></textarea>`;
  const dom=new JSDOM(html,{runScripts:"outside-only",url:"https://chat.qwen.ai/c/ab"});dom.window.sessionStorage.setItem("__capiQwenPrompt","AB_PROMPT");const e=dom.window.eval(scriptExtraerEstadoStreamingQwen()) as any;expect(e.response).toBe("PRIMERA REAL");expect(e.requiereEleccion).toBeTrue();expect(e.alternativasCompletas).toBeTrue();expect(e.done).toBeFalse();
 });
+
+test('Qwen no reutiliza un asistente anterior mientras espera el turno del prompt actual',()=>{
+  const html=`<main>
+    <div class="qwen-chat-message-assistant"><div class="response-message-content">RESPUESTA ANTIGUA</div><div role="toolbar"></div></div>
+    <div class="qwen-chat-message qwen-chat-message-user">PROMPT_ACTUAL</div>
+    <textarea class="message-input-textarea"></textarea>
+  </main>`;
+  const dom=new JSDOM(html,{runScripts:'outside-only',url:'https://chat.qwen.ai/c/x'});
+  dom.window.sessionStorage.setItem('__capiQwenPrompt','PROMPT_ACTUAL');
+  const e=dom.window.eval(scriptExtraerEstadoStreamingQwen()) as any;
+  expect(e.isAssistant).toBeFalse();
+  expect(e.response).toBe('');
+  expect(e.done).toBeFalse();
+});
+
+
+test("Qwen vacío expone turno y regeneración sin convertir pensamiento en respuesta",()=>{
+  const html=`<main>
+    <div class="qwen-chat-message qwen-chat-message-user">PROMPT_VACIO</div>
+    <div class="qwen-chat-message qwen-chat-message-assistant">
+      <div class="chat-response-message" id="chat-response-message-turno-123">
+        <div class="qwen-chat-thinking-status-card-title-text">Pensamiento completado</div>
+        <div class="response-message-content phase-answer"></div>
+        <button aria-label="Regenerar"></button>
+      </div>
+    </div>
+  </main><textarea class="message-input-textarea"></textarea>`;
+  const dom=new JSDOM(html,{runScripts:"outside-only",url:"https://chat.qwen.ai/c/vacia"});
+  Object.defineProperty(dom.window.HTMLElement.prototype,"getBoundingClientRect",{value(){return {width:20,height:20,left:0,top:0,right:20,bottom:20,x:0,y:0,toJSON(){}}}});
+  dom.window.sessionStorage.setItem("__capiQwenPrompt","PROMPT_VACIO");
+  const e=dom.window.eval(scriptExtraerEstadoStreamingQwen()) as any;
+  expect(e.response).toBe("");
+  expect(e.turnoId).toBe("turno-123");
+  expect(e.canRegenerate).toBeTrue();
+  expect(e.hasSemanticResponse).toBeTrue();
+  expect(e.extractionStrategy).toBe("none");
+});

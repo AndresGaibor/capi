@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { expect, test } from "bun:test";
 import { SupervisorEjecucionChat } from "../../src/modulos/chat/aplicacion/SupervisorEjecucionChat";
 
@@ -23,4 +24,23 @@ test("supervisor traduce eventos a estado durable", () => {
 test("supervisor detecta cancelación persistida", () => {
   const repo=new RepoFake(); const s=new SupervisorEjecucionChat(repo as any,{id:"e",proyectoLocalId:"p",proveedor:"qwen",propietarioId:"o",prompt:"x"}); s.iniciar(); repo.ejecucion.cancelacionSolicitada=true;
   expect(()=>s.verificarCancelacion()).toThrow("cancelada");
+});
+
+test('el catch de background no degrada una cancelación durable a fallida', () => {
+  const fuente = readFileSync('src/entradas/cli/comandos/chat/enviar.ts','utf8');
+  expect(fuente).toContain('actual?.estado !== "cancelada"');
+});
+
+
+test("marcarFallo no sobrescribe una cancelación ya persistida", () => {
+  const repo = new RepoFake();
+  const supervisor = new SupervisorEjecucionChat(repo as any, { id: "e", proyectoLocalId: "p", proveedor: "deepseek", propietarioId: "o", prompt: "x" });
+  supervisor.iniciar();
+  repo.ejecucion.cancelacionSolicitada = true;
+  let error: unknown;
+  try { supervisor.verificarCancelacion(); } catch (capturado) { error = capturado; }
+  supervisor.marcarFallo(error);
+  expect(repo.ejecucion.estado).toBe("cancelada");
+  expect(repo.eventos.map((evento) => evento.tipo)).toContain("ejecucion_cancelada");
+  expect(repo.eventos.map((evento) => evento.tipo)).not.toContain("ejecucion_fallida");
 });

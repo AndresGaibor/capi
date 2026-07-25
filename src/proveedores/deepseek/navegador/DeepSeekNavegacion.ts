@@ -22,8 +22,13 @@ export class DeepSeekNavegacion {
     throw new ErrorPaginaProveedor("El textarea de DeepSeek no apareció");
   }
 
-  async obtenerConversacionActual(): Promise<string | null> {
-    const url = (await this.transporte.evaluar<string>("window.location.href")).value ?? "";
-    return url.match(/\/a\/chat\/s\/([^/?#]+)/)?.[1] ?? null;
+  async obtenerConversacionActual(intentos = 1): Promise<string | null> {
+    for (let intento = 0; intento < intentos; intento++) {
+      const url = (await this.transporte.evaluar<string>("window.location.href")).value ?? "";
+      const id = url.match(/\/a\/chat\/s\/([^/?#]+)/)?.[1] ?? null;
+      if (id) return id;
+      if (intento + 1 < intentos) await this.pausa(250);
+    }
+    return null;
   }
 }

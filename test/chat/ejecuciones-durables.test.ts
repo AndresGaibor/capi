@@ -3,6 +3,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { RepositorioContextoSqlite } from "../../src/plataforma/persistencia/RepositorioContextoSqlite";
+import { Database } from "bun:sqlite";
 
 const crear = () => new RepositorioContextoSqlite(join(mkdtempSync(join(tmpdir(), "capi-durable-")), "capi.db"));
 
@@ -31,4 +32,19 @@ test("cancelación y reanudación son persistentes", () => {
   expect(repo.obtenerEjecucionChat("e")?.estado).toBe("reconectando");
   expect(repo.obtenerEjecucionChat("e")?.cancelacionSolicitada).toBe(false);
   repo.cerrar();
+});
+
+
+test("abre una segunda conexión mientras existe un escritor WAL", () => {
+  const ruta = join(mkdtempSync(join(tmpdir(), "capi-wal-")), "capi.db");
+  const primera = new RepositorioContextoSqlite(ruta);
+  const escritor = new Database(ruta);
+  escritor.exec("PRAGMA busy_timeout=5000; BEGIN IMMEDIATE;");
+  expect(() => {
+    const segunda = new RepositorioContextoSqlite(ruta);
+    segunda.cerrar();
+  }).not.toThrow();
+  escritor.exec("ROLLBACK;");
+  escritor.close();
+  primera.cerrar();
 });

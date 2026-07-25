@@ -6,6 +6,7 @@ import { QwenModelos } from "./QwenModelos";
 import { QwenNavegacion } from "./QwenNavegacion";
 import { QwenStreaming } from "./QwenStreaming";
 import { QwenConversaciones } from "./QwenConversaciones";
+import { QwenOpciones } from "./QwenOpciones";
 import type { ResultadoAdjuntos } from "../../../nucleo/archivos/EstrategiaAdjuntos";
 import type { GestorPestanas } from "../../../plataforma/webbridge/GestorPestanas";
 import type { ResumenConversacionQwen } from "./QwenConversaciones";
@@ -18,6 +19,7 @@ export class QwenPaginaChat {
   private readonly envio: QwenEnvio;
   private readonly streaming: QwenStreaming;
   private readonly conversaciones: QwenConversaciones;
+  private readonly opciones: QwenOpciones;
 
   constructor(transporte: TransporteNavegador, gestorPestanas?: GestorPestanas) {
     this.transporte = transporte;
@@ -26,12 +28,14 @@ export class QwenPaginaChat {
     this.envio = new QwenEnvio(transporte);
     this.streaming = new QwenStreaming(transporte);
     this.conversaciones = new QwenConversaciones(transporte);
+    this.opciones = new QwenOpciones(transporte);
   }
 
   verificarDisponibilidad(): Promise<void> { return this.navegacion.verificarDisponibilidad(); }
   abrirConversacion(id?: string, nuevaPestana = false): Promise<void> { return this.navegacion.abrirConversacion(id, nuevaPestana); }
   listarModelos(): Promise<ModeloChat[]> { return this.modelos.listar(); }
   seleccionarModelo(modelo: string): Promise<ModeloChat> { return this.modelos.seleccionar(modelo); }
+  configurarRazonamiento(activar: boolean): Promise<void> { return this.opciones.configurarRazonamiento(activar); }
   adjuntar(rutas: string[] = []): Promise<ResultadoAdjuntos> { return this.envio.adjuntar(rutas); }
   enviarPrompt(prompt: string): Promise<void> { return this.envio.enviar(prompt); }
   observarStreaming(): AsyncGenerator<EventoStreaming> { return this.streaming.observar(); }

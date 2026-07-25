@@ -28,6 +28,10 @@ export class ProveedorDeepSeek implements ProveedorChat {
     } else {
       yield { tipo: "inicio", mensaje: "Continuando polling sin reenviar el prompt..." };
     }
+    const conversacionActual = await this.pagina.obtenerConversacionActual(peticion.conversacionId ? 1 : 40);
+    if (conversacionActual && conversacionActual !== peticion.conversacionId) {
+      yield { tipo: "conversacion", id: conversacionActual };
+    }
     yield { tipo: "inicio", mensaje: "Recibiendo respuesta..." };
     yield* this.pagina.observar();
   }

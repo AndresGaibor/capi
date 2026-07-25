@@ -19,6 +19,11 @@ export function scriptPrepararEnvioQwen(prompt: string): string {
     } else return { ok:false, error:'Tipo de entrada de Qwen no soportado' };
     entrada.dispatchEvent(new InputEvent('input', { bubbles:true, inputType:'insertText', data:${JSON.stringify(prompt)} }));
     entrada.dispatchEvent(new Event('change', { bubbles:true }));
+    const claveReact=Object.keys(entrada).find(k=>k.startsWith('__reactProps$'));
+    const propsReact=claveReact?entrada[claveReact]:null;
+    if(typeof propsReact?.onChange==='function'){
+      propsReact.onChange({target:entrada,currentTarget:entrada,nativeEvent:{isComposing:false},type:'change'});
+    }
     const valor = 'value' in entrada ? String(entrada.value || '') : String(entrada.textContent || '');
     if (valor !== ${JSON.stringify(prompt)}) return { ok:false, error:'Qwen no conservó el prompt en la entrada' };
     const raiz = entrada.closest('form') || entrada.parentElement?.parentElement || document;

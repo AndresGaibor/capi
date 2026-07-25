@@ -7,6 +7,8 @@ interface NodoAccesible {
 const esNodo = (valor: unknown): valor is NodoAccesible =>
   !!valor && typeof valor === "object";
 
+const TEXTO_INTERFAZ = /^(?:acknowledging (?:receipt|the signal).*|saltar|skip|autom[aá]tico|el contenido generado por ia puede no ser preciso\.?|esta retroalimentaci[oó]n nos ayudar[aá]|¿?qu[eé] respuesta prefieres\??|respuesta [12]|prefiero esta respuesta)$/i;
+
 export function extraerRespuestaSnapshotQwen(tree: unknown): string {
   const textos: string[] = [];
   let despuesDelPensamiento = false;
@@ -35,7 +37,7 @@ export function extraerRespuestaSnapshotQwen(tree: unknown): string {
         terminado = false;
         return;
       }
-      if (despuesDelPensamiento && textos.at(-1) !== nombre) textos.push(nombre);
+      if (despuesDelPensamiento && !TEXTO_INTERFAZ.test(nombre) && textos.at(-1) !== nombre) textos.push(nombre);
       return;
     }
     visitar(valor.children);

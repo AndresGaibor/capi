@@ -11,6 +11,7 @@ import { RegistroChatHistorial } from "./RegistroChatHistorial";
 import { prepararContextoChat, obtenerGit } from "./PrepararContextoChat";
 import { EjecutarIntentosChat } from "./EjecutarIntentosChat";
 import { SupervisorEjecucionChat } from "./SupervisorEjecucionChat";
+import { esErrorEjecucionCancelada } from "./ErrorEjecucionCancelada";
 import { identidadProceso } from "../../../plataforma/procesos/IdentidadProceso";
 import { createHash } from "node:crypto";
 
@@ -135,6 +136,7 @@ export class EnviarMensajeConContexto {
     let modeloFinal = modeloMultimodal;
     let conversacionFinal = idFinal;
     let errorFinal: unknown;
+    let cancelada = false;
     let completado = false;
     let pausado = false;
     let pensamiento = "";
@@ -201,21 +203,23 @@ export class EnviarMensajeConContexto {
       }
     } catch (error) {
       errorFinal = error;
+      cancelada = esErrorEjecucionCancelada(error);
       if (!peticion.soloPoll && !envioConfirmado) this.repositorio.actualizarEnvioIdempotente?.(huellaEnvio,"desconocido");
-      supervisor.marcarFallo(error);
+      if (!cancelada) supervisor.marcarFallo(error);
       throw error;
     } finally {
       this.control.liberar();
       this.historial.finalizar({
         historialId,
-        estado: completado ? "completada" : pausado ? "pausada" : "fallida",
+        estado: completado ? "completada" : pausado ? "pausada" : cancelada ? "cancelada" : "fallida",
         conversacionId: conversacionFinal,
         modelo: modeloFinal,
         contextoHash: paquete?.hash,
         archivos: archivosFinales,
         respuestaCaracteres: respuesta.length,
-        error:
-          errorFinal instanceof Error
+        error: cancelada
+          ? undefined
+          : errorFinal instanceof Error
             ? errorFinal.message
             : errorFinal
               ? String(errorFinal)

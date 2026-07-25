@@ -10,8 +10,10 @@ import { scriptListarConversacionesChatGPT } from "../scripts/listarConversacion
 import { SELECTORES_CHATGPT } from "../selectores/SelectoresChatGPT";
 import { detectarTipoArchivo } from "../../../nucleo/archivos/DetectarTipoArchivo";
 import { basename, resolve } from "node:path";
-import { readFileSync } from "node:fs";
+import { readFile } from "node:fs/promises";
+import { normalizarUrlConversacion, canonicalizarConversacion } from "../utilidades/urlConversacion";
 
+const MAX_TAMANIO_ARCHIVO = 100 * 1024 * 1024;
 const dormir = (ms: number) => new Promise((cumplir) => setTimeout(cumplir, ms));
 
 export class ChatGPTPaginaChat {
@@ -60,17 +62,6 @@ export class ChatGPTPaginaChat {
     return `https://chatgpt.com/c/${uuid}`;
   }
 
-  private canonicalizarConversacion(href: string): string | null {
-    try {
-      const url = new URL(href, "https://chatgpt.com");
-      const match = url.pathname.match(/\/c\/([^/?#]+)/);
-      if (!match) return null;
-      return `https://chatgpt.com/c/${match[1]}`;
-    } catch {
-      return null;
-    }
-  }
-
   async abrirConversacion(id?: string, nuevaPestana = false): Promise<void> {
     if (!id) {
       const actual = await this.obtenerConversacionActual();
@@ -78,7 +69,7 @@ export class ChatGPTPaginaChat {
       await this.transporte.navegar("https://chatgpt.com/", nuevaPestana, "CAPI ChatGPT");
       return;
     }
-    const url = this.normalizarUrlConversacion(id);
+    const url = normalizarUrlConversacion(id);
     if (!nuevaPestana && (await this.obtenerConversacionActual()) === url) return;
     await this.transporte.navegar(url, nuevaPestana, "CAPI ChatGPT");
     this.asistentesAntes = 0;
@@ -101,7 +92,7 @@ export class ChatGPTPaginaChat {
     const vistas = new Set<string>();
     return (resultado.value ?? [])
       .map((item) => ({
-        id: this.canonicalizarConversacion(item.href),
+        id: canonicalizarConversacion(item.href),
         titulo: item.titulo.trim(),
       }))
       .filter((item): item is ConversacionResumen => Boolean(item.id))
@@ -191,8 +182,10 @@ export class ChatGPTPaginaChat {
   private async adjuntarPorDom(rutas: string[], selector: string): Promise<void> {
     const transferencia = new DataTransfer();
     for (const ruta of rutas) {
+      const buffer = await readFile(ruta);
+      if (buffer.length > MAX_TAMANIO_ARCHIVO) throw new Error(`Archivo demasiado grande: ${basename(ruta)} (max ${MAX_TAMANIO_ARCHIVO / 1024 / 1024}MB)`);
+      const base64 = buffer.toString("base64");
       const clave = `__capiChatGPTArchivo_${crypto.randomUUID().replaceAll("-", "")}`;
-      const base64 = readFileSync(ruta).toString("base64");
       await this.transporte.evaluar(`window[${JSON.stringify(clave)}]=[]`);
       for (let inicio = 0; inicio < base64.length; inicio += 256 * 1024) {
         await this.transporte.evaluar(`window[${JSON.stringify(clave)}].push(${JSON.stringify(base64.slice(inicio, inicio + 256 * 1024))})`);
@@ -270,7 +263,7 @@ export class ChatGPTPaginaChat {
     const resultado = await this.transporte.evaluar<string>("location.href");
     const href = resultado.value ?? "";
     if (!/chatgpt\.com|chat\.openai\.com/.test(href) || !/\/c\//.test(href)) return null;
-    return this.canonicalizarConversacion(href);
+    return canonicalizarConversacion(href);
   }
 
   async diagnosticar(): Promise<Record<string, unknown>> {

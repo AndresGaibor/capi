@@ -1,5 +1,5 @@
 import { Database } from "bun:sqlite";
-import { mkdirSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import {
   ESQUEMA_CONTEXTO,
@@ -35,8 +35,10 @@ export class RepositorioContextoSqlite {
 
   constructor(ruta: string) {
     mkdirSync(dirname(ruta), { recursive: true });
+    const baseNueva = !existsSync(ruta);
     this.db = new Database(ruta, { create: true });
-    this.db.exec("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;");
+    this.db.exec("PRAGMA busy_timeout=5000; PRAGMA foreign_keys=ON;");
+    if (baseNueva) this.db.exec("PRAGMA journal_mode=WAL;");
     migrarContextoSqlite(this.db);
 
     this.proyectos = new RepositorioProyectos(this.db);
@@ -252,7 +254,7 @@ export class RepositorioContextoSqlite {
   finalizarEjecucionHistorial(
     id: string,
     entrada: {
-      estado: "completada" | "pausada" | "fallida";
+      estado: "completada" | "pausada" | "cancelada" | "fallida";
       conversacionId?: string;
       modelo?: string;
       contextoHash?: string;

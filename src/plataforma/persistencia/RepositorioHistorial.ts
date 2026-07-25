@@ -29,7 +29,7 @@ export class RepositorioHistorial {
     });
   }
 
-  finalizar(id: string, entrada: { estado: "completada" | "pausada" | "fallida"; conversacionId?: string; modelo?: string; contextoHash?: string; archivos?: string[]; respuestaCaracteres?: number; error?: string }, ahora = Date.now()): void {
+  finalizar(id: string, entrada: { estado: "completada" | "pausada" | "cancelada" | "fallida"; conversacionId?: string; modelo?: string; contextoHash?: string; archivos?: string[]; respuestaCaracteres?: number; error?: string }, ahora = Date.now()): void {
     this.db.query(`UPDATE ejecuciones_historial SET finalizado_en=$fin,estado=$estado,
       conversacion_id=COALESCE($conversacion,conversacion_id),modelo=COALESCE($modelo,modelo),
       contexto_hash=COALESCE($contexto,contexto_hash),archivos_json=COALESCE($archivos,archivos_json),

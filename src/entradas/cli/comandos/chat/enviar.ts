@@ -151,8 +151,11 @@ export async function ejecutarChat(args: Record<string, unknown>): Promise<void>
   } catch (error) {
     if (tareaId) {
       const ahora = Date.now();
-      app.repositorioContexto.actualizarEjecucionChat(tareaId,{estado:"fallida",completadaEn:ahora,errorDetalle:error instanceof Error?error.message:String(error)},ahora);
-      app.repositorioContexto.anexarEventoEjecucion(tareaId,"fallo_temprano",{mensaje:error instanceof Error?error.message:String(error)},ahora);
+      const actual = app.repositorioContexto.obtenerEjecucionChat(tareaId);
+      if (actual?.estado !== "cancelada") {
+        app.repositorioContexto.actualizarEjecucionChat(tareaId,{estado:"fallida",completadaEn:ahora,errorDetalle:error instanceof Error?error.message:String(error)},ahora);
+        app.repositorioContexto.anexarEventoEjecucion(tareaId,"fallo_temprano",{mensaje:error instanceof Error?error.message:String(error)},ahora);
+      }
     }
     if (formato === "human") { consola.error(error instanceof Error ? error.message : String(error)); consola.info(sugerenciaProveedorAlternativo(proveedor)); }
     else {
