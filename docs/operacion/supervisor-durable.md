@@ -22,4 +22,4 @@ Use `CAPI_NO_GUARDAR_RESPUESTAS=1` para persistir solo estados, hashes y métric
 
 ## Tampermonkey opcional
 
-`scripts/tampermonkey/capi-qwen-observador.user.js` publica únicamente estado, heartbeat y conteo de mutaciones en `window.__CAPI_QWEN_BRIDGE__`. No controla envíos y no es requisito para CAPI.
+`~/code/javascript/tampermonkey-scripts/dist/capi-qwen-observador.user.js` publica únicamente estado, heartbeat y conteo de mutaciones en `window.__CAPI_QWEN_BRIDGE__`. No controla envíos y no es requisito para CAPI.
