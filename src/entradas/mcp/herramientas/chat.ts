@@ -48,7 +48,7 @@ export function registrarHerramientasChat(server: McpServer): void {
           .optional()
           .default(4 * 1024 * 1024),
         fallback: z.boolean().optional().default(true),
-        timeoutMs: z.number().int().min(1000).max(1800000).optional(),
+        timeoutMs: z.number().int().min(1000).max(86400000).optional(),
         dryRun: z.boolean().optional().default(false),
       },
     },

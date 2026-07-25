@@ -2,9 +2,11 @@ import { CAPI_CONFIG } from "../../../configuracion/ConstantesCapi";
 import type { EventoStreaming } from "../../../nucleo/chat/EventoStreaming";
 import type { TransporteNavegador } from "../../../plataforma/webbridge/TransporteNavegador";
 import { scriptExtraerEstadoStreamingQwen } from "../scripts/extraerEstadoStreaming";
+import { extraerRespuestaSnapshotQwen } from "./ExtraerRespuestaSnapshotQwen";
 
 const dormir = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const normalizar = (texto: string) => texto.replace(/\u200B/g, "").replace(/\r\n/g, "\n").replace(/[ \t]+\n/g, "\n").trim();
+const INTERVALO_RESCATE_SNAPSHOT = 30_000;
 
 interface EstadoQwen {
   think: string;
@@ -14,6 +16,7 @@ interface EstadoQwen {
   isAssistant: boolean;
   isError: boolean;
   errorMessage: string;
+  extractionStrategy?: string;
 }
 
 export class QwenStreaming {
@@ -25,68 +28,72 @@ export class QwenStreaming {
 
   async *observar(): AsyncGenerator<EventoStreaming> {
     let ultimoPensamiento = "", ultimaRespuesta = "", observada = "";
-    let ultimoCambio = this.ahora(), vaciaDesde: number | null = null;
+    let ultimoCambio = this.ahora();
+    let ultimoRescateSnapshot = 0;
     const inicio = this.ahora();
     let respondiendo = false;
-    let yieldPausado = false;
 
     while (true) {
       await this.pausa(CAPI_CONFIG.TIMEOUTS_MS.INTERVALO_STREAMING);
-      const resultado = await this.transporte.evaluar<EstadoQwen>(scriptExtraerEstadoStreamingQwen());
+      let evento: EstadoQwen | undefined;
+      try {
+        evento = (await this.transporte.evaluar<EstadoQwen>(scriptExtraerEstadoStreamingQwen())).value;
+      } catch {
+        // WebBridge puede fallar de forma transitoria durante navegaciones o renders largos.
+        continue;
+      }
       const ahora = this.ahora();
 
-      if (!resultado.value) {
+      if (!evento) {
         if (ahora - inicio >= CAPI_CONFIG.TIMEOUTS_MS.STREAMING_CHUNK_TIMEOUT) {
-          yieldPausado = true;
-        } else {
-          continue;
-        }
-      } else {
-        const evento = resultado.value;
-        if (evento.isError) {
-          yield { tipo: "error", mensaje: evento.errorMessage || "Error en Qwen", recuperable: true };
+          const conversacionId = await this.obtenerConversacionActual();
+          yield { tipo: "pausado", motivo: "No se pudo leer el estado de Qwen durante un periodo prolongado. Puedes retomar con 'capi chat --continuar'", conversacionId: conversacionId ?? undefined };
           return;
         }
-        if (!evento.isAssistant) {
-          if (ahora - inicio >= CAPI_CONFIG.TIMEOUTS_MS.STREAMING_CHUNK_TIMEOUT) {
-            yieldPausado = true;
-          } else {
-            continue;
-          }
-        } else {
-          const pensamiento = normalizar(evento.think || "");
-          const respuesta = normalizar(evento.response || "");
-          if (respuesta) vaciaDesde = null;
-          else if (/pensamiento completado/i.test(pensamiento)) {
-            vaciaDesde ??= ahora;
-            if (ahora - vaciaDesde >= CAPI_CONFIG.TIMEOUTS_MS.RESPUESTA_VACIA_QWEN) {
-              yieldPausado = true;
-            }
-          }
-          if (!respondiendo && pensamiento !== ultimoPensamiento) {
-            const delta = pensamiento.startsWith(ultimoPensamiento) ? pensamiento.slice(ultimoPensamiento.length) : pensamiento;
-            ultimoPensamiento = pensamiento;
-            if (delta) yield { tipo: "pensamiento", contenido: delta };
-          }
-          if (respuesta !== observada) { observada = respuesta; ultimoCambio = ahora; }
-          if (respuesta && !respondiendo) respondiendo = true;
-          if (respuesta.startsWith(ultimaRespuesta) && respuesta.length > ultimaRespuesta.length) {
-            const delta = respuesta.slice(ultimaRespuesta.length);
-            ultimaRespuesta = respuesta;
-            yield { tipo: "respuesta", contenido: delta };
-          }
-          if (respondiendo && respuesta) {
-            const estabilidad = evento.done ? CAPI_CONFIG.TIMEOUTS_MS.ESTABILIDAD_FIN_QWEN_DOM_DONE : evento.isGenerating ? CAPI_CONFIG.TIMEOUTS_MS.ESTABILIDAD_FIN_QWEN_CON_STOP : CAPI_CONFIG.TIMEOUTS_MS.ESTABILIDAD_FIN_QWEN;
-            if (ahora - ultimoCambio >= estabilidad) { yield { tipo: "fin" }; return; }
-          }
+        continue;
+      }
+      if (evento.isError) {
+        yield { tipo: "error", mensaje: evento.errorMessage || "Error en Qwen", recuperable: true };
+        return;
+      }
+      if (!evento.isAssistant) {
+        if (ahora - inicio >= CAPI_CONFIG.TIMEOUTS_MS.STREAMING_CHUNK_TIMEOUT) {
+          const conversacionId = await this.obtenerConversacionActual();
+          yield { tipo: "pausado", motivo: "Qwen no creó todavía un turno asistente. Puedes retomar con 'capi chat --continuar'", conversacionId: conversacionId ?? undefined };
+          return;
+        }
+        continue;
+      }
+
+      const pensamiento = normalizar(evento.think || "");
+      let respuesta = normalizar(evento.response || "");
+      if (!respuesta && /pensamiento completado/i.test(pensamiento) && this.transporte.snapshotAccesibilidad && ahora - ultimoRescateSnapshot >= INTERVALO_RESCATE_SNAPSHOT) {
+        ultimoRescateSnapshot = ahora;
+        try {
+          respuesta = normalizar(extraerRespuestaSnapshotQwen((await this.transporte.snapshotAccesibilidad()).tree));
+        } catch {
+          // El rescate es complementario; un fallo no interrumpe el polling principal.
         }
       }
 
-      if (yieldPausado) {
-        const conversacionId = await this.obtenerConversacionActual();
-        yield { tipo: "pausado", motivo: "Qwen continúa procesando la respuesta. Puedes retomarla con 'capi chat --continuar'", conversacionId: conversacionId ?? undefined };
-        return;
+      if (!respondiendo && pensamiento !== ultimoPensamiento) {
+        const delta = pensamiento.startsWith(ultimoPensamiento) ? pensamiento.slice(ultimoPensamiento.length) : pensamiento;
+        ultimoPensamiento = pensamiento;
+        if (delta) yield { tipo: "pensamiento", contenido: delta };
       }
+      if (respuesta !== observada) { observada = respuesta; ultimoCambio = ahora; }
+      if (respuesta && !respondiendo) respondiendo = true;
+      if (respuesta.startsWith(ultimaRespuesta) && respuesta.length > ultimaRespuesta.length) {
+        const delta = respuesta.slice(ultimaRespuesta.length);
+        ultimaRespuesta = respuesta;
+        yield { tipo: "respuesta", contenido: delta, estrategia: respuesta === evento.response ? (evento.extractionStrategy ?? "dom") : "snapshot-accesible" };
+      }
+      if (respondiendo && respuesta) {
+        const estabilidad = evento.done ? CAPI_CONFIG.TIMEOUTS_MS.ESTABILIDAD_FIN_QWEN_DOM_DONE : evento.isGenerating ? CAPI_CONFIG.TIMEOUTS_MS.ESTABILIDAD_FIN_QWEN_CON_STOP : CAPI_CONFIG.TIMEOUTS_MS.ESTABILIDAD_FIN_QWEN;
+        if (ahora - ultimoCambio >= estabilidad) { yield { tipo: "fin" }; return; }
+      }
+      // No existe timeout interno mientras Qwen tenga un turno asistente válido.
+      // El límite absoluto, cuando se desea, lo impone PeticionChat.timeoutMs.
     }
   }
 

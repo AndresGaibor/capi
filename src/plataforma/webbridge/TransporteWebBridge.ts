@@ -10,6 +10,7 @@ export class TransporteWebBridge implements TransporteNavegador {
   rellenar(selector: string, valor: string) { return this.cliente.rellenar(selector, valor); }
   click(selector: string) { return this.cliente.click(selector); }
   evaluar<T>(codigo: string) { return this.cliente.evaluar<T>(codigo); }
+  snapshotAccesibilidad() { return this.cliente.snapshotAccesibilidad(); }
   cdp<T>(method: string, params?: Record<string, unknown>) { return this.cliente.cdp<T>(method, params); }
   cerrarSesion() { return this.cliente.cerrarSesion(); }
 }

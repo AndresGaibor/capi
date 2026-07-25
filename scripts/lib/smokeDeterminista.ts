@@ -119,7 +119,7 @@ export async function ejecutarSmokeTextoYContinuidad(opciones: OpcionesSmokeText
   limpiado: true;
 }> {
   const marcador = opciones.marcador ?? crearMarcadorSmoke("TEXT");
-  const timeout = opciones.timeoutMs ?? Number(process.env.CAPI_SMOKE_TIMEOUT_MS ?? 90_000);
+  const timeout = opciones.timeoutMs ?? Number(process.env.CAPI_SMOKE_TIMEOUT_MS ?? (opciones.proveedor === "qwen" ? 3_900_000 : 180_000));
   const ejecutar = opciones.ejecutar ?? ((comando, limite, proceso) => ejecutarProcesoConTimeout(comando, limite, proceso));
   const entorno = crearEntornoSmokeAislado("text");
   let conversacionId: string | undefined;

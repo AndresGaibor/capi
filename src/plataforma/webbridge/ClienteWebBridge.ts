@@ -41,6 +41,7 @@ export class ClienteWebBridge {
     await this.comando("click", { selector });
   }
   evaluar<T>(codigo: string) { return this.comando<{ value: T }>("evaluate", { code: codigo }); }
+  snapshotAccesibilidad() { return this.comando<{ url: string; title: string; tree: unknown }>("snapshot"); }
   cdp<T>(method: string, params: Record<string, unknown> = {}) { return this.comando<T>("cdp", { method, params }); }
   cerrarSesion() { return this.comando<void>("close_session"); }
 }
