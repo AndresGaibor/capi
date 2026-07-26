@@ -9,15 +9,49 @@ description: Usa CAPI para Qwen 3.8, Qwen 3.7, DeepSeek, contexto de proyecto, a
 
 Usa CAPI cuando necesites una segunda opinión, investigación, revisión de código, análisis largo o acceso a los modelos web configurados. Es compatible con cualquier agente que pueda ejecutar comandos o conectarse a MCP por stdio.
 
-## Flujo obligatorio
+## Flujo obligatorio para un agente nuevo
 
-1. Si desconoces la versión o capacidades, ejecuta `capi discover --output json`.
-2. Consulta `capi schema chat.send --output json` antes de usar argumentos poco habituales.
-3. Para comprobar decisiones sin efectos, ejecuta `capi chat --dry-run --output json "<prompt>"`.
-4. Para tareas de código usa `capi chat --contexto-auto --incremental --resumen --output jsonl "<prompt>"`.
-5. Antes de un envío grande usa `capi contexto explicar --automatico --output json`.
-6. Lee una línea JSON por evento hasta `event="completed"`.
-7. Si recibes un sobre con `ok=false`, examina `error.retryable`, `error.code` y `suggestions`.
+1. **Descubre el contrato**: `capi discover --output json`. Devuelve `protocol: "capi.agent.v1"`, todas las interfaces (`cli`, `mcp`, `typescript-core`), los formatos de salida, los proveedores con fallback multimodal y el `multimodal.imagesNeverBundledAsText: true`.
+2. **Aprende un comando específico**: `capi schema <comando> --output json`. Ejemplos: `chat.send`, `context.pack`, `vision.analyze`, `vision.compare`. Cada schema incluye `behavior` (`nonInteractive`, `idempotent`, `sideEffects`) y `errors` con `code`, `retryable` y `recovery`.
+3. **Diagnóstica el entorno**: `capi doctor --output json`. Devuelve el estado de proyecto, persistencia y los 3 proveedores. Si falla un proveedor, `data.sugerencias` ahora expone comandos accionables (recrear sesión, diagnosticar página, etc.).
+4. **Comprueba sin efectos**: `capi chat --dry-run --output json "<prompt>"` lista las `actions` que ejecutaría sin navegar al proveedor.
+5. **Envía real**: `capi chat -p qwen -m preview --output jsonl --request-id tarea-1 "<prompt>"`.
+6. **Stream JSONL**: lee una línea JSON por evento hasta `event="completed"`.
+7. **Errores**: si `ok=false`, examina `error.code`, `error.retryable` y `suggestions[]`.
+
+## Nombres canónicos para descubrimiento
+
+Los nombres que `schema` y `discover` aceptan están en inglés (`chat.send`, `context.pack`). El CLI también acepta alias en español (`chat enviar`, `contexto empaquetar`). Si dudas, usa el nombre canónico del schema. Los siguientes son los más usados:
+
+| Schema | CLI español | Uso |
+|---|---|---|
+| `chat.send` | `chat enviar` | chat con contexto |
+| `chat.continue` | `--continuar` | polling sin reenviar |
+| `context.pack` | `contexto empaquetar` | bundle de archivos |
+| `context.explain` | `contexto explicar` | auditar contexto |
+| `history.list` | `historial listar` | ejecuciones recientes |
+| `diagnostics.contracts` | `diagnostico contratos` | modelos reales |
+| `state.metrics` | `estado metricas` | métricas por proyecto |
+| `state.clean` | `estado limpiar` | limpiar capas locales |
+| `state.export` | `estado exportar` | snapshot portable |
+| `state.import` | `estado importar` | restaurar snapshot |
+| `vision.analyze` | `vision analizar` | analizar imagen |
+| `vision.compare` | `vision comparar` | comparar dos imágenes |
+| `project.current` | `proyecto actual` | proyecto detectado |
+| `conversations.project` | `conversaciones proyecto` | conversaciones del proyecto |
+| `doctor` | `doctor` | diagnóstico global |
+| `discover` | `discover` | meta-catálogo de comandos |
+| `schema` | `schema` | schema de un comando |
+| `tasks` | `tareas` | ejecuciones durables en background |
+
+## Trampas de UX que detectará el CLI
+
+- Flags con guiones: la CLI usa kebab-case (`--dry-run`, `--max-context-bytes`) aunque el schema muestre camelCase (`dryRun`, `maxContextBytes`). El CLI convierte al pasar al schema.
+- Typos de subcomandos: `capi modelo listar` sugiere `modelos`. `capi vision listar` sugiere `capi vision --help`.
+- Typos de flags: `capi chat enviar --foo` sugiere `-f` (Distancia Levenshtein ≤ 4).
+- El comando `chat` admite forma corta: `capi chat -p qwen "hola"` equivale a `capi chat enviar -p qwen "hola"`.
+- Salida `human` y `json`/`jsonl` son mutuamente excluyentes en contracto: usa `json` o `jsonl` siempre que tu agente consuma stdout.
+- Errores CLI imprimen texto en stderr; los eventos van en stdout. No mezcles.
 
 ## Selección de proveedor
 
@@ -40,6 +74,19 @@ Cada línea contiene `protocol`, `requestId`, `command`, `event` y `data`. Event
 
 No mezcles stdout estructurado con análisis de stderr. No dependas de colores, emojis o texto de consola humano.
 
+## Códigos de error frecuentes
+
+| Código | Retryable | Acción del agente |
+|---|---|---|
+| `PROVEEDOR_NO_ENCONTRADO` | false | usa `suggestions[].command` |
+| `ALTA_DEMANDA` | true | confía en el reintento automático |
+| `TIMEOUT_PROVEEDOR` | true | reintenta con otro proveedor |
+| `SESION_NAVEGADOR` | true | ejecuta `capi doctor` y sigue `data.sugerencias` |
+| `MODELO_NO_DISPONIBLE` | true | usa un modelo con modalidad correcta |
+| `CONTEXTO_INVALIDO` | false | corrige rutas/globs |
+| `ENVIO_INCIERTO` | false | usa `--continuar` para observar sin reenviar |
+| `CONVERSACION_INVALIDA` | true | se reintentará en chat nuevo automáticamente |
+
 ## Ejemplo
 
 ```bash
@@ -60,7 +107,7 @@ capi chat -p qwen -m preview --output jsonl --request-id revision-42 \
 
 - Usa `capi estado metricas --output json` para elegir proveedor/modelo según éxito y duración.
 - Usa `capi estado exportar --archivo ...` antes de migrar una máquina o limpiar estado.
-- Nunca ejecutes `estado limpiar` o `estado importar` sin confirmación explícita.
+- Nunca ejecustes `estado limpiar` o `estado importar` sin confirmación explícita.
 - Usa `--timeout` en tareas desatendidas.
 - `CAPI_LOCAL_ENCRYPTION_KEY` protege resúmenes locales; nunca incluyas esa clave en prompts o logs.
 
