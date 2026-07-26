@@ -33,6 +33,6 @@ describe("ChatGPTPaginaChat bucle de clic", () => {
       },
     };
     const pagina = new ChatGPTPaginaChat(transporte);
-    await expect(pagina.enviar("hola")).rejects.toThrow(/No apareció el botón de envío de ChatGPT/);
+    await expect(pagina.enviar("hola")).rejects.toThrow(/No aparecio.*boton de envio de ChatGPT/);
   });
 });

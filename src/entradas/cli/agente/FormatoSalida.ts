@@ -23,7 +23,12 @@ export interface SobreAgente<T = unknown> {
 }
 
 const obtenerCodigo = (error: unknown): string => {
-  if (error && typeof error === "object" && "codigo" in error && typeof error.codigo === "string") return error.codigo;
+  if (!error) return "ERROR_INTERNO";
+  if (typeof error === "object") {
+    if ("codigo" in error && typeof (error as { codigo: unknown }).codigo === "string") return (error as { codigo: string }).codigo;
+    if ("code" in error && typeof (error as { code: unknown }).code === "string") return (error as { code: string }).code;
+    if (error instanceof Error && error.name === "WebBridgeError") return "WEBBRIDGE";
+  }
   const mensaje = error instanceof Error ? error.message : String(error);
   if (/alta demanda|issue connecting|server is busy/i.test(mensaje)) return "ALTA_DEMANDA";
   if (/timeout|tiempo máximo|excedió/i.test(mensaje)) return "TIMEOUT_PROVEEDOR";
@@ -34,7 +39,10 @@ const obtenerCodigo = (error: unknown): string => {
 };
 
 const esReintentable = (error: unknown, codigo: string): boolean => {
-  if (error && typeof error === "object" && "retryable" in error && typeof error.retryable === "boolean") return error.retryable;
+  if (error && typeof error === "object" && "retryable" in error && typeof (error as { retryable: unknown }).retryable === "boolean") {
+    return (error as { retryable: boolean }).retryable;
+  }
+  if (codigo.startsWith("WEBBRIDGE")) return true;
   return ["ALTA_DEMANDA", "TIMEOUT_PROVEEDOR", "SESION_NAVEGADOR", "WEBBRIDGE"].includes(codigo);
 };
 
@@ -42,12 +50,36 @@ export function crearSobreExito<T>(command: string, data: T, opciones: { request
   return { protocol: "capi.agent.v1", ok: true, command, requestId: opciones.requestId ?? crypto.randomUUID(), data, suggestions: opciones.suggestions ?? [] };
 }
 
+interface ErrorAplicacionForma {
+  codigo?: string;
+  code?: string;
+  retryable?: boolean;
+  suggestions?: SugerenciaAgente[];
+  details?: unknown;
+  name?: string;
+  message?: string;
+}
+
 export function crearSobreError(command: string, error: unknown, opciones: { requestId?: string; suggestions?: SugerenciaAgente[]; details?: unknown } = {}): SobreAgente {
   const code = obtenerCodigo(error);
+  const mensaje = error instanceof Error ? error.message : String(error);
+  const forma = (error && typeof error === "object" ? (error as ErrorAplicacionForma) : undefined);
+  let suggestionsPropias: SugerenciaAgente[] = [];
+  if (forma && Array.isArray(forma.suggestions)) {
+    suggestionsPropias = (forma.suggestions || []).map((s) => ({ command: String(s.command), reason: String(s.reason) }));
+  }
+  let detallesCombinados: Record<string, unknown> | undefined = undefined;
+  if (opciones.details !== undefined) detallesCombinados = opciones.details as Record<string, unknown>;
+  else if (forma && forma.details !== undefined) detallesCombinados = { details: forma.details } as Record<string, unknown>;
   return {
     protocol: "capi.agent.v1", ok: false, command, requestId: opciones.requestId ?? crypto.randomUUID(),
-    error: { code, message: error instanceof Error ? error.message : String(error), retryable: esReintentable(error, code), details: opciones.details },
-    suggestions: opciones.suggestions ?? [],
+    error: {
+      code,
+      message: mensaje,
+      retryable: esReintentable(error, code),
+      ...(detallesCombinados ? { details: detallesCombinados } : {}),
+    },
+    suggestions: opciones.suggestions ?? suggestionsPropias,
   };
 }
 

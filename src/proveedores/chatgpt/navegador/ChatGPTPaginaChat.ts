@@ -8,6 +8,7 @@ import { scriptEnviarPromptChatGPT } from "../scripts/enviarPrompt";
 import { scriptEstadoStreamingChatGPT } from "../scripts/estadoStreaming";
 import { scriptListarConversacionesChatGPT } from "../scripts/listarConversaciones";
 import { SELECTORES_CHATGPT } from "../selectores/SelectoresChatGPT";
+import { ErrorPaginaProveedor } from "../../../nucleo/errores/ErroresAplicacion";
 import { detectarTipoArchivo } from "../../../nucleo/archivos/DetectarTipoArchivo";
 import { basename, resolve } from "node:path";
 import { readFile } from "node:fs/promises";
@@ -52,7 +53,7 @@ export class ChatGPTPaginaChat {
       if (listo.value) return;
       await dormir(200);
     }
-    throw new Error("El editor de ChatGPT no apareció");
+    throw new ErrorPaginaProveedor("El editor de ChatGPT no aparecio tras 15s. La pagina puede haber cambiado de UI o tienes una sesion expirada.");
   }
 
   private normalizarUrlConversacion(id: string): string {
@@ -128,7 +129,7 @@ export class ChatGPTPaginaChat {
   }
 
   async enviar(prompt: string): Promise<void> {
-    if (this.ocupado) throw new Error("ChatGPT ya tiene una operación en curso");
+    if (this.ocupado) throw new ErrorPaginaProveedor("ChatGPT ya tiene una operacion en curso. Espera a que termine o cancela con Ctrl+C.");
     this.ocupado = true;
     try {
       const antes = await this.transporte.evaluar<{ turns: number; response: string }>(scriptEstadoStreamingChatGPT());
@@ -159,7 +160,7 @@ export class ChatGPTPaginaChat {
             if (clic.value) { enviado = true; break; }
             await dormir(100);
           }
-          if (!enviado) throw new Error("No apareció el botón de envío de ChatGPT tras escribir en ProseMirror");
+          if (!enviado) throw new ErrorPaginaProveedor("No aparecio el boton de envio de ChatGPT tras escribir en ProseMirror. Reintenta con --proveedor deepseek si persiste.");
           await this.confirmarEnvio();
           return;
         }
@@ -187,7 +188,7 @@ export class ChatGPTPaginaChat {
     const inicio = Date.now();
     while (Date.now() - inicio < timeoutMs) {
       const estado = await this.transporte.evaluar<{ turns: number; response: string; error?: string }>(scriptEstadoStreamingChatGPT());
-      if (estado.value?.error) throw new Error(`ChatGPT rechazó el envío: ${estado.value.error}`);
+      if (estado.value?.error) throw new ErrorPaginaProveedor(`ChatGPT rechazo el envio: ${estado.value.error}`);
       if ((estado.value?.turns ?? 0) > this.asistentesAntes) return;
       if (estado.value?.response !== this.respuestaAntes && estado.value?.response !== "") return;
       const detenido = await this.transporte.evaluar<boolean>(`Boolean(document.querySelector(${JSON.stringify(SELECTORES_CHATGPT.detener)}))`);

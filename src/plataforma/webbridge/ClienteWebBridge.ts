@@ -6,15 +6,41 @@ export function sanearRegistroRed(entrada:any):RegistroRedSaneado {
   return {url:sanearUrl(String(entrada?.url??"")),method:entrada?.method,status:typeof entrada?.status==="number"?entrada.status:undefined,requestHeaders:headers(entrada?.requestHeaders),responseHeaders:headers(entrada?.responseHeaders)};
 }
 
+export class WebBridgeError extends Error {
+  readonly codigo: string;
+  readonly codigoExtension: string | undefined;
+  readonly mensajeOriginal: unknown;
+  readonly peticion: { action: string; args: Record<string, unknown> };
+  constructor({ codigo, codigoExtension, mensajeOriginal, mensaje, peticion }: { codigo: string; codigoExtension?: string; mensajeOriginal?: unknown; mensaje: string; peticion: { action: string; args: Record<string, unknown> } }) {
+    super(mensaje);
+    this.name = "WebBridgeError";
+    this.codigo = codigo;
+    this.codigoExtension = codigoExtension;
+    this.mensajeOriginal = mensajeOriginal;
+    this.peticion = peticion;
+  }
+}
+
 const SESION = process.env.CAPI_WEBBRIDGE_SESSION?.trim() || "capi-capture";
 type FetchLike = typeof fetch;
 export class ClienteWebBridge {
   constructor(private readonly baseUrl = "http://127.0.0.1:10086", private readonly fetcher: FetchLike = fetch) {}
   async estaDisponible(): Promise<boolean> { try { const r = await this.fetcher(this.baseUrl, { method: "HEAD", signal: AbortSignal.timeout(3000) }); return r.ok || r.status < 500; } catch { return false; } }
   private async comando<T>(action: string, args: Record<string, unknown> = {}): Promise<T> {
-    const r = await this.fetcher(`${this.baseUrl}/command`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, args, session: SESION }), signal: AbortSignal.timeout(CAPI_CONFIG.TIMEOUTS_MS.WEBBRIDGE_COMMAND) });
-    const j = await r.json() as { ok: boolean; data: T; error?: unknown };
-    if (!j.ok) throw new Error(`WebBridge error: ${JSON.stringify(j.error ?? j)}`);
+    const peticion = { action, args };
+    const r = await this.fetcher(`${this.baseUrl}/command`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...peticion, session: SESION }), signal: AbortSignal.timeout(CAPI_CONFIG.TIMEOUTS_MS.WEBBRIDGE_COMMAND) });
+    const j = await r.json() as { ok: boolean; data: T; error?: { code?: string; message?: string; data?: unknown } };
+    if (!j.ok) {
+      const errorRemoto = j.error ?? { message: "Respuesta WebBridge sin error definido" };
+      const codigo = errorRemoto.code === "tool_error" ? "WEBBRIDGE_TOOL_ERROR" : errorRemoto.code ? `WEBBRIDGE_${String(errorRemoto.code).toUpperCase()}` : "WEBBRIDGE";
+      throw new WebBridgeError({
+        codigo,
+        codigoExtension: errorRemoto.code,
+        mensajeOriginal: errorRemoto,
+        mensaje: errorRemoto.message ?? `WebBridge rechazo la accion ${action}`,
+        peticion,
+      });
+    }
     return j.data;
   }
   async navegar(url: string, nuevaPestana: boolean, tituloGrupo?: string) {

@@ -10,6 +10,7 @@ import { separarAdjuntosContexto } from "../../../../modulos/contexto/aplicacion
 import { spawn } from "node:child_process";
 import { identidadProceso } from "../../../../plataforma/procesos/IdentidadProceso";
 import { CAPI_CONFIG } from "../../../../configuracion/ConstantesCapi";
+import { ErrorArgumentosInvalidos } from "../../../../nucleo/errores/ErroresAplicacion";
 
 function normalizarConversacionId(valor: string): string {
   try {
@@ -77,7 +78,7 @@ export function recogerImagenesArgumentos(args: Record<string, unknown>, argv = 
 export async function ejecutarChat(args: Record<string, unknown>): Promise<void> {
   const formato = String(args.output ?? "human") as FormatoSalida;
   const requestId = args.requestId ? String(args.requestId) : crypto.randomUUID();
-  if (!formatos.has(formato)) throw new Error(`Formato no soportado: ${formato}`);
+  if (!formatos.has(formato)) throw new ErrorArgumentosInvalidos(`Formato no soportado: ${formato}. Usa human, markdown, json o jsonl.`,[{command:"capi chat enviar \"texto\" --output jsonl",reason:"formato valido para agentes"}]);
   const tareaId = process.env.CAPI_TASK_ID;
   const app = crearAplicacion();
   const proyecto = app.gestorContexto.proyectoActual();
@@ -86,9 +87,9 @@ export async function ejecutarChat(args: Record<string, unknown>): Promise<void>
   const modelo = args.modelo ? String(args.modelo) : preferencias?.modelo;
   const continuar = Boolean(args.continuar);
   const prompt = String(args.prompt ?? "").trim();
-  if (!continuar && !prompt) throw new Error("Debes proporcionar un prompt. Usa --continuar para consultar una respuesta pendiente.");
-  if (args.nueva && (args.conversacion || continuar)) throw new Error("--nueva no se puede combinar con --conversacion ni --continuar.");
-  if (continuar && (prompt || args.nueva || args.archivo || args.imagen)) throw new Error("--continuar solo hace polling: no acepta prompt, archivos, imágenes ni --nueva.");
+  if (!continuar && !prompt) throw new ErrorArgumentosInvalidos("Debes proporcionar un prompt o usa --continuar para consultar una respuesta pendiente.",[{command:'capi chat enviar "tu prompt" --output jsonl',reason:"enviar un prompt"},{command:"capi chat --continuar -p <proveedor> --output json",reason:"solo hacer polling de una respuesta existente"}]);
+  if (args.nueva && (args.conversacion || continuar)) throw new ErrorArgumentosInvalidos("--nueva no se puede combinar con --conversacion ni --continuar.",[{command:'capi chat enviar "tu prompt" --nueva',reason:"forzar nueva conversacion sin id"},{command:'capi chat enviar "tu prompt" --conversacion <id>',reason:"reanudar una conversacion existente"}]);
+  if (continuar && (prompt || args.nueva || args.archivo || args.imagen)) throw new ErrorArgumentosInvalidos("--continuar solo hace polling: no acepta prompt, archivos, imágenes ni --nueva.",[{command:"capi chat --continuar -p <proveedor> --output json",reason:"observar sin enviar nuevo prompt"}]);
   const conversacionExplicita = args.conversacion ? normalizarConversacionId(String(args.conversacion)) : undefined;
   const seleccion = app.gestorContexto.seleccionar(proveedor, conversacionExplicita).seleccion;
   const conversacionId = resolverConversacionParaChat({
@@ -98,7 +99,7 @@ export async function ejecutarChat(args: Record<string, unknown>): Promise<void>
   });
   const imagenes = continuar ? [] : recogerImagenesArgumentos(args);
 
-  if (continuar && !conversacionId) throw new Error("No se encontró una conversación activa. Usa --conversacion URL_O_ID.");
+  if (continuar && !conversacionId) throw new ErrorArgumentosInvalidos("No se encontró una conversación activa. Usa --conversacion URL_O_ID.",[{command:"capi chat --continuar --conversacion https://chatgpt.com/c/<uuid>",reason:"reanudar la conversacion explicita"},{command:"capi conversaciones proyecto --output json",reason:"listar las conversaciones disponibles"}]);
   if (args.background && !process.env.CAPI_TASK_CHILD) {
     const id = crypto.randomUUID();
     const identidad = identidadProceso();
