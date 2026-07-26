@@ -9,19 +9,27 @@ description: Usa CAPI para Qwen 3.8, Qwen 3.7, DeepSeek, contexto de proyecto, a
 
 Usa CAPI cuando necesites una segunda opinión, investigación, revisión de código, análisis largo o acceso a los modelos web configurados. Es compatible con cualquier agente que pueda ejecutar comandos o conectarse a MCP por stdio.
 
+## Formato de salida
+
+**Markdown es el formato por defecto.** No necesitas `--output` para obtener salida legible.
+- `markdown` (default): estructura legible por IA con títulos, listas y código.
+- `human`: ANSI con colores para terminal humana.
+- `json`: sobre `{protocol, ok, command, data, error, suggestions}`.
+- `jsonl`: streaming línea por evento.
+
 ## Flujo obligatorio para un agente nuevo
 
-1. **Descubre el contrato**: `capi discover --output json`. Devuelve `protocol: "capi.agent.v1"`, todas las interfaces (`cli`, `mcp`, `typescript-core`), los formatos de salida, los proveedores con fallback multimodal y el `multimodal.imagesNeverBundledAsText: true`.
-2. **Aprende un comando específico**: `capi schema <comando> --output json`. Ejemplos: `chat.send`, `context.pack`, `vision.analyze`, `vision.compare`. Cada schema incluye `behavior` (`nonInteractive`, `idempotent`, `sideEffects`) y `errors` con `code`, `retryable` y `recovery`.
-3. **Diagnóstica el entorno**: `capi doctor --output json`. Devuelve el estado de proyecto, persistencia y los 3 proveedores. Si falla un proveedor, `data.sugerencias` ahora expone comandos accionables (recrear sesión, diagnosticar página, etc.).
-4. **Comprueba sin efectos**: `capi chat --dry-run --output json "<prompt>"` lista las `actions` que ejecutaría sin navegar al proveedor.
-5. **Envía real**: `capi chat -p qwen -m preview --output jsonl --request-id tarea-1 "<prompt>"`.
-6. **Stream JSONL**: lee una línea JSON por evento hasta `event="completed"`.
+1. **Descubre el contrato**: `capi discover` — devuelve markdown con todos los comandos, proveedores, quickStart y tabla de errores. Usa `--output json` si necesitas parseo programático.
+2. **Aprende un comando**: `capi schema <comando>` — muestra inputSchema, behavior y errors. Ejemplos: `chat.send`, `context.pack`, `vision.analyze`.
+3. **Diagnostica el entorno**: `capi doctor` — verifica proyecto, persistencia y proveedores. Si falla uno, `suggestions[]` expone comandos accionables.
+4. **Comprueba sin efectos**: `capi chat --dry-run "<prompt>"` — lista las acciones sin navegar.
+5. **Envía real**: `capi chat -p qwen -m preview "<prompt>"`.
+6. **Stream JSONL**: `capi chat -p qwen --output jsonl "<prompt>"` — lee una línea JSON por evento hasta `event="completed"`.
 7. **Errores**: si `ok=false`, examina `error.code`, `error.retryable` y `suggestions[]`.
 
 ## Nombres canónicos para descubrimiento
 
-Los nombres que `schema` y `discover` aceptan están en inglés (`chat.send`, `context.pack`). El CLI también acepta alias en español (`chat enviar`, `contexto empaquetar`). Si dudas, usa el nombre canónico del schema. Los siguientes son los más usados:
+Los nombres que `schema` y `discover` aceptan están en inglés (`chat.send`, `context.pack`). El CLI también acepta alias en español (`chat enviar`, `contexto empaquetar`). Si dudas, usa el nombre canónico del schema.
 
 | Schema | CLI español | Uso |
 |---|---|---|
@@ -46,12 +54,11 @@ Los nombres que `schema` y `discover` aceptan están en inglés (`chat.send`, `c
 
 ## Trampas de UX que detectará el CLI
 
-- Flags con guiones: la CLI usa kebab-case (`--dry-run`, `--max-context-bytes`) aunque el schema muestre camelCase (`dryRun`, `maxContextBytes`). El CLI convierte al pasar al schema.
-- Typos de subcomandos: `capi modelo listar` sugiere `modelos`. `capi vision listar` sugiere `capi vision --help`.
-- Typos de flags: `capi chat enviar --foo` sugiere `-f` (Distancia Levenshtein ≤ 4).
+- Flags con guiones: la CLI usa kebab-case (`--dry-run`, `--max-context-bytes`) aunque el schema muestre camelCase. El CLI convierte al pasar al schema.
+- Typos de subcomandos: `capi modelo listar` sugiere `modelos`.
+- Typos de flags: `capi chat enviar --foo` sugiere `-f` (Levenshtein ≤ 4).
 - El comando `chat` admite forma corta: `capi chat -p qwen "hola"` equivale a `capi chat enviar -p qwen "hola"`.
-- Salida `human` y `json`/`jsonl` son mutuamente excluyentes en contracto: usa `json` o `jsonl` siempre que tu agente consuma stdout.
-- Errores CLI imprimen texto en stderr; los eventos van en stdout. No mezcles.
+- Errores CLI van en stderr; eventos van en stdout. No mezcles.
 
 ## Selección de proveedor
 
@@ -60,19 +67,6 @@ Los nombres que `schema` y `discover` aceptan están en inglés (`chat.send`, `c
 - Usa DeepSeek `expert` para análisis profundo y `default` para velocidad/estabilidad.
 - DeepSeek `expert/vision → default` siempre abre un chat nuevo; nunca intentes cambiar el modelo dentro del chat anterior.
 - Si un proveedor completo falla, usa la sugerencia de proveedor alternativo incluida en la salida.
-
-## Contrato JSONL
-
-Cada línea contiene `protocol`, `requestId`, `command`, `event` y `data`. Eventos principales:
-
-- `progress`
-- `reasoning.delta`
-- `response.delta`
-- `model.selected`
-- `conversation.selected`
-- `completed`
-
-No mezcles stdout estructurado con análisis de stderr. No dependas de colores, emojis o texto de consola humano.
 
 ## Códigos de error frecuentes
 
@@ -87,13 +81,11 @@ No mezcles stdout estructurado con análisis de stderr. No dependas de colores, 
 | `ENVIO_INCIERTO` | false | usa `--continuar` para observar sin reenviar |
 | `CONVERSACION_INVALIDA` | true | se reintentará en chat nuevo automáticamente |
 
-## Ejemplo
+## Ejemplo rápido
 
 ```bash
-capi chat -p qwen -m preview --output jsonl --request-id revision-42 \
-  "Revisa el diff actual y devuelve riesgos, correcciones y pruebas faltantes."
+capi chat -p qwen -m preview "Revisa el diff actual y devuelve riesgos, correcciones y pruebas faltantes."
 ```
-
 
 ## Contexto inteligente
 
@@ -103,11 +95,23 @@ capi chat -p qwen -m preview --output jsonl --request-id revision-42 \
 - `capi contexto explicar`: audita presupuesto, inclusión, omisión, redacción y truncamiento.
 - `capi historial listar`: recupera modelo, conversación, rama, commit, contexto y estado de cada ejecución.
 
+## Tareas durables
+
+- `capi chat --background "<prompt>"`: crea una tarea durable y devuelve `taskId`.
+- `capi tareas esperar <id> --timeout 7200000`: bloquea hasta que termine.
+- `capi tareas seguir <id> --follow`: streaming de eventos en tiempo real.
+- `capi tareas limpiar`: preview sin `--confirmar`, ejecuta con `--confirmar`.
+
+## Doctor y reparación
+
+- `capi doctor`: diagnostica proyecto, persistencia y proveedores.
+- `capi doctor --repair`: intenta reiniciar WebBridge y re-verificar proveedores fallidos.
+
 ## Operación local avanzada
 
-- Usa `capi estado metricas --output json` para elegir proveedor/modelo según éxito y duración.
+- Usa `capi estado metricas` para elegir proveedor/modelo según éxito y duración.
 - Usa `capi estado exportar --archivo ...` antes de migrar una máquina o limpiar estado.
-- Nunca ejecustes `estado limpiar` o `estado importar` sin confirmación explícita.
+- Nunca ejecutes `estado limpiar` o `estado importar` sin confirmación explícita.
 - Usa `--timeout` en tareas desatendidas.
 - `CAPI_LOCAL_ENCRYPTION_KEY` protege resúmenes locales; nunca incluyas esa clave en prompts o logs.
 
@@ -116,19 +120,21 @@ capi chat -p qwen -m preview --output jsonl --request-id revision-42 \
 Cuando recibas una imagen y no puedas verla o analizarla directamente:
 
 1. No inventes su contenido ni extraigas conclusiones del nombre del archivo.
-2. Ejecuta `capi discover --output json` y verifica una modalidad `image` compatible.
-3. Prefiere `capi vision analizar <ruta> --tipo descripcion --output json`.
-4. Para OCR usa `--tipo ocr`; para interfaces `--tipo ui`; para diagramas `--tipo diagrama`; para tablas `--tipo tabla`.
-5. Para comparar usa `capi vision comparar <antes> <despues> --output json`.
-6. Procesa `response` o `parsed` y conserva siempre `incertidumbres`.
-7. No conviertas imágenes a Base64 dentro del prompt, stdout o logs.
-8. No uses un fallback que carezca de modalidad `image`. Qwen `preview` corresponde a `Qwen3.8-Max-Preview`; Qwen `plus` es multimodal; Qwen `max` es solo texto. DeepSeek requiere el alias `vision`.
-
-También puedes usar chat directamente:
+2. Prefiere `capi vision analizar <ruta> --tipo descripcion`.
+3. Para OCR usa `--tipo ocr`; para interfaces `--tipo ui`; para diagramas `--tipo diagrama`; para tablas `--tipo tabla`.
+4. Para comparar usa `capi vision comparar <antes> <despues>`.
+5. Procesa `response` o `parsed` y conserva siempre `incertidumbres`.
+6. No conviertas imágenes a Base64 dentro del prompt, stdout o logs.
+7. No uses un fallback que carezca de modalidad `image`. Qwen `preview` = `Qwen3.8-Max-Preview`; Qwen `plus` es multimodal; Qwen `max` es solo texto. DeepSeek requiere alias `vision`.
 
 ```bash
-capi chat -p qwen --imagen captura.png --imagen segunda.webp --output jsonl \
-  'Compara las imágenes y devuelve JSON con diferencias e incertidumbres.'
+capi chat -p qwen --imagen captura.png --imagen segunda.webp 'Compara las imágenes y devuelve JSON con diferencias e incertidumbres.'
 ```
 
-`-f captura.png` también se clasifica automáticamente como imagen y nunca se incluye en el bundle `.txt`. Alias: `preview` = `Qwen3.8-Max-Preview`; `plus` = `Qwen3.7-Plus` multimodal; `max` = `Qwen3.7-Max` solo texto. Usa `--no-fallback` cuando debas validar un modelo exacto.
+Alias: `preview` = `Qwen3.8-Max-Preview`; `plus` = `Qwen3.7-Plus` multimodal; `max` = `Qwen3.7-Max` solo texto. Usa `--no-fallback` cuando debas validar un modelo exacto.
+
+## Reglas de seguridad
+
+- Nunca incluyas tokens, cookies o claves en prompts o logs.
+- Nunca ejecutes `estado limpiar` o `estado importar` sin `--confirmar`.
+- `CAPI_LOCAL_ENCRYPTION_KEY` protege resúmenes locales; nunca la expongas.

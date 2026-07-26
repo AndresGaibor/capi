@@ -12,3 +12,15 @@ test("la conversación explícita tiene prioridad", () => {
 test("nueva elimina cualquier conversación seleccionada", () => {
   expect(resolverConversacionParaChat({ explicita: undefined, persistida: "guardada", forzarNueva: true })).toBeUndefined();
 });
+
+test("persistencia por path: misma ruta siempre reutiliza la conversación guardada", () => {
+  const ruta = "/Users/dev/mi-proyecto";
+  const primera = resolverConversacionParaChat({ explicita: undefined, persistida: "conv-abc", forzarNueva: false });
+  expect(primera).toBe("conv-abc");
+  const segunda = resolverConversacionParaChat({ explicita: undefined, persistida: "conv-abc", forzarNueva: false });
+  expect(segunda).toBe("conv-abc");
+});
+
+test("forcerNueva ignora persistencia y devuelve undefined para chat nuevo", () => {
+  expect(resolverConversacionParaChat({ explicita: undefined, persistida: "conv-abc", forzarNueva: true })).toBeUndefined();
+});

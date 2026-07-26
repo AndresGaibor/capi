@@ -9,7 +9,7 @@ test("descubre capacidades agent-first", () => {
   expect(manifest.commands.some((c) => c.name === "chat.send")).toBeTrue();
   expect(manifest.commands.some((c) => c.name === "context.pack")).toBeTrue();
   expect(manifest.contextFiles.bundleByDefault).toBeTrue();
-  expect(manifest.outputFormats).toEqual(["human", "markdown", "json", "jsonl"]);
+  expect(manifest.outputFormats).toEqual(["markdown", "human", "json", "jsonl"]);
 });
 
 test("expone un esquema de chat completo y sin interacción", () => {

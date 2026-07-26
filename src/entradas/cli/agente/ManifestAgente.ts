@@ -259,7 +259,7 @@ export function obtenerManifestAgente() {
     protocol: "capi.agent.v1" as const,
     version: "2.6.0",
     interfaces: ["cli", "mcp", "typescript-core"],
-    outputFormats: ["human", "markdown", "json", "jsonl"],
+    outputFormats: ["markdown", "human", "json", "jsonl"],
     longRunning: { commands: comandos.filter((c) => c.behavior.longRunning).map((c) => c.name), defaultTimeoutMs: 1800000, helper: "capi tareas esperar <id> --timeout 7200000" },
     quickStart: QUICK_START,
     providers: [
