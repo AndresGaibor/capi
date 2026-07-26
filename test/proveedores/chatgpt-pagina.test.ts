@@ -89,53 +89,46 @@ test("ChatGPTPaginaChat verifica, canonicaliza conversaciones, envía y diagnost
   expect((await pagina.diagnosticar()).proveedor).toBe("chatgpt");
 });
 
-test("ChatGPT usa ProseMirror con CDP y clic DOM cuando fill falla", async () => {
-  let insercion = "";
-  let clicsDom = 0;
+test("ChatGPT usa rellenar y clic para enviar cuando rellenar está disponible", async () => {
+  let textoRellenado = "";
+  let clics = 0;
   let lecturasEstado = 0;
   const transporte: any = {
     async estaDisponible() { return true; },
-    async rellenar() { throw new Error("fill: Uncaught"); },
-    async click() { throw new Error("click: Uncaught"); },
-    async cdp(metodo: string, parametros: any = {}) {
-      if (metodo === "Input.insertText") insercion = String(parametros.text ?? "");
-      return {};
-    },
+    async rellenar(_selector: string, valor: string) { textoRellenado = valor; },
+    async click(_selector: string) { clics++; },
+    async cdp() { return {}; },
     async evaluar(codigo: string) {
       if (codigo.includes("isGenerating")) {
         lecturasEstado++;
         return { value: lecturasEstado === 1 ? { turns: 0, response: "", done: false, isGenerating: false } : { turns: 1, response: "OK", done: false, isGenerating: false } };
       }
-      if (codigo.includes(".ProseMirror") && codigo.includes("focus")) return { value: true };
-      if (codigo.includes("btn.click()")) { clicsDom++; return { value: true }; }
-      if (codigo.includes("Boolean(document.querySelector")) return { value: false };
       return { value: undefined };
     },
   };
   await new ChatGPTPaginaChat(transporte).enviar("PROMPT_CHATGPT");
-  expect(insercion).toBe("PROMPT_CHATGPT");
-  expect(clicsDom).toBe(1);
+  expect(textoRellenado).toBe("PROMPT_CHATGPT");
+  expect(clics).toBe(1);
 });
 
-test("ChatGPT activa foco y lifecycle antes de insertar en ProseMirror", async () => {
-  const metodos: string[] = [];
+test("ChatGPT usa script DOM cuando rellenar no está disponible", async () => {
+  let insercion = "";
   let lecturasEstado = 0;
   const transporte: any = {
-    async cdp(metodo: string) { metodos.push(metodo); return {}; },
+    async estaDisponible() { return true; },
+    async cdp() { return {}; },
     async evaluar(codigo: string) {
       if (codigo.includes("isGenerating")) {
         lecturasEstado++;
         return { value: lecturasEstado === 1 ? { turns: 0, response: "", done: false, isGenerating: false } : { turns: 1, response: "OK", done: false, isGenerating: false } };
       }
-      if (codigo.includes(".ProseMirror") && codigo.includes("focus")) return { value: true };
+      if (codigo.includes("editor")) return { value: true };
       if (codigo.includes("btn.click()")) return { value: true };
-      if (codigo.includes("Boolean(document.querySelector")) return { value: false };
+      if (codigo.includes("prompt-textarea")) return { value: true };
       return { value: undefined };
     },
   };
-  await new ChatGPTPaginaChat(transporte).enviar("PROMPT_ACTIVO");
-  expect(metodos.slice(0, 2)).toEqual(["Emulation.setFocusEmulationEnabled", "Page.setWebLifecycleState"]);
-  expect(metodos).toContain("Input.insertText");
+  await new ChatGPTPaginaChat(transporte).enviar("PROMPT_SCRIPT");
 });
 
 test("todos los scripts generados por el envío de ChatGPT compilan", async () => {

@@ -56,6 +56,15 @@ export class ChatGPTPaginaChat {
     throw new ErrorPaginaProveedor("El editor de ChatGPT no aparecio tras 15s. La pagina puede haber cambiado de UI o tienes una sesion expirada.");
   }
 
+  private async esperarInputArchivos(selector: string, timeoutMs: number): Promise<void> {
+    const inicio = Date.now();
+    while (Date.now() - inicio < timeoutMs) {
+      const listo = await this.transporte.evaluar<boolean>(`Boolean(document.querySelector(${JSON.stringify(selector)}))`);
+      if (listo.value) return;
+      await dormir(300);
+    }
+  }
+
   private normalizarUrlConversacion(id: string): string {
     const limpio = id.trim();
     if (/^https?:\/\//i.test(limpio)) {
@@ -135,48 +144,17 @@ export class ChatGPTPaginaChat {
       const antes = await this.transporte.evaluar<{ turns: number; response: string }>(scriptEstadoStreamingChatGPT());
       this.asistentesAntes = antes.value?.turns ?? 0;
       this.respuestaAntes = antes.value?.response ?? "";
-      if (this.transporte.cdp) {
-        await this.activarPagina();
-        const editorRico = await this.transporte.evaluar<boolean>(`(() => {
-          const editor=document.querySelector('.ProseMirror[contenteditable="true"]');
-          if (!(editor instanceof HTMLElement)) return false;
-          editor.focus();
-          return true;
-        })()`);
-        if (editorRico.value) {
-          await this.transporte.cdp("Input.dispatchKeyEvent", { type: "keyDown", key: "a", code: "KeyA", modifiers: 4 });
-          await this.transporte.cdp("Input.dispatchKeyEvent", { type: "keyUp", key: "a", code: "KeyA", modifiers: 4 });
-          await this.transporte.cdp("Input.dispatchKeyEvent", { type: "keyDown", key: "Backspace", code: "Backspace" });
-          await this.transporte.cdp("Input.dispatchKeyEvent", { type: "keyUp", key: "Backspace", code: "Backspace" });
-          await this.transporte.cdp("Input.insertText", { text: prompt });
-          let enviado = false;
-          for (let intento = 0; intento < 5; intento++) {
-            const clic = await this.transporte.evaluar<boolean>(`(() => {
-              const btn=[...document.querySelectorAll(${JSON.stringify(SELECTORES_CHATGPT.enviar)})]
-                .find(b=>b instanceof HTMLButtonElement && !b.disabled);
-              if (!(btn instanceof HTMLButtonElement)) return false;
-              btn.click(); return true;
-            })()`);
-            if (clic.value) { enviado = true; break; }
-            await dormir(100);
-          }
-          if (!enviado) throw new ErrorPaginaProveedor("No aparecio el boton de envio de ChatGPT tras escribir en ProseMirror. Reintenta con --proveedor deepseek si persiste.");
-          await this.confirmarEnvio();
-          return;
-        }
-      }
+      await this.activarPagina();
       if (this.transporte.rellenar) {
         await this.transporte.rellenar(SELECTORES_CHATGPT.editor, prompt);
         if (this.transporte.click) {
           await this.transporte.click(SELECTORES_CHATGPT.enviar);
-          await this.confirmarEnvio();
-          return;
+        } else {
+          await this.transporte.evaluar(`(() => { const boton = document.querySelector(${JSON.stringify(SELECTORES_CHATGPT.enviar)}); if (!(boton instanceof HTMLElement)) throw new Error("No se encontró el botón de envío de ChatGPT"); boton.click(); return true; })()`);
         }
-        await this.transporte.evaluar(`(() => { const boton = document.querySelector(${JSON.stringify(SELECTORES_CHATGPT.enviar)}); if (!(boton instanceof HTMLElement)) throw new Error("No se encontró el botón de envío de ChatGPT"); boton.click(); return true; })()`);
-        await this.confirmarEnvio();
-        return;
+      } else {
+        await this.transporte.evaluar(scriptEnviarPromptChatGPT(prompt));
       }
-      await this.transporte.evaluar(scriptEnviarPromptChatGPT(prompt));
       await this.confirmarEnvio();
     } finally {
       this.ocupado = false;
@@ -221,44 +199,42 @@ export class ChatGPTPaginaChat {
         await this.adjuntarPorDom(rutas, selector);
       }
     }
-    await this.confirmarAdjunto(archivos);
-  }
-
-  private async confirmarAdjunto(_archivos: string[]): Promise<void> {
-    const timeoutMs = 10000;
-    const inicio = Date.now();
-    while (Date.now() - inicio < timeoutMs) {
-      const hayChip = await this.transporte.evaluar<boolean>(`Boolean(document.querySelector('[data-testid="attachment-chip"], [data-testid="file-chip"], [data-testid="image-attachment"]"))`);
-      if (hayChip.value) return;
-      await dormir(300);
-    }
   }
 
   private async adjuntarPorDom(rutas: string[], selector: string): Promise<void> {
-    const transferencia = new DataTransfer();
+    const archivosData: Array<{ base64: string; nombre: string; mime: string }> = [];
     for (const ruta of rutas) {
       const buffer = await readFile(ruta);
       if (buffer.length > MAX_TAMANIO_ARCHIVO) throw new Error(`Archivo demasiado grande: ${basename(ruta)} (max ${MAX_TAMANIO_ARCHIVO / 1024 / 1024}MB)`);
-      const base64 = buffer.toString("base64");
+      archivosData.push({ base64: buffer.toString("base64"), nombre: basename(ruta), mime: detectarTipoArchivo(ruta).mime });
+    }
+    await this.esperarInputArchivos(selector, 10000);
+    for (const arch of archivosData) {
       const clave = `__capiChatGPTArchivo_${crypto.randomUUID().replaceAll("-", "")}`;
       await this.transporte.evaluar(`window[${JSON.stringify(clave)}]=[]`);
-      for (let inicio = 0; inicio < base64.length; inicio += 256 * 1024) {
-        await this.transporte.evaluar(`window[${JSON.stringify(clave)}].push(${JSON.stringify(base64.slice(inicio, inicio + 256 * 1024))})`);
+      for (let inicio = 0; inicio < arch.base64.length; inicio += 256 * 1024) {
+        await this.transporte.evaluar(`window[${JSON.stringify(clave)}].push(${JSON.stringify(arch.base64.slice(inicio, inicio + 256 * 1024))})`);
       }
-      const detectado = detectarTipoArchivo(ruta);
-      const binario = (await this.transporte.evaluar<string>(`(() => { const bin = atob(window[${JSON.stringify(clave)}].join("")); delete window[${JSON.stringify(clave)}]; return bin; })()`)).value ?? "";
-      const bytes = new Uint8Array(binario.length); for (let i = 0; i < binario.length; i++) bytes[i] = binario.charCodeAt(i);
-      const archivo = new File([bytes], basename(ruta), { type: detectado.mime, lastModified: Date.now() });
-      transferencia.items.add(archivo);
+      await this.transporte.evaluar(`(() => {
+        const bin = atob(window[${JSON.stringify(clave)}].join(""));
+        delete window[${JSON.stringify(clave)}];
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        const archivo = new File([bytes], ${JSON.stringify(arch.nombre)}, { type: ${JSON.stringify(arch.mime)}, lastModified: Date.now() });
+        const input = document.querySelector(${JSON.stringify(selector)});
+        if (!(input instanceof HTMLInputElement)) return { ok: false, error: "no input" };
+        const dt = new DataTransfer();
+        if (input.files) { for (const f of input.files) dt.items.add(f); }
+        dt.items.add(archivo);
+        input.files = dt.files;
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+        return { ok: true, count: input.files.length };
+      })()`);
     }
-    const estado = await this.transporte.evaluar<{ ok: boolean; error?: string }>(`(() => {
+    const estado = await this.transporte.evaluar<{ ok: boolean; error?: string; count?: number }>(`(() => {
       const input = document.querySelector(${JSON.stringify(selector)});
       if (!(input instanceof HTMLInputElement)) return { ok: false, error: "No se encontró el input de ChatGPT" };
-      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "files")?.set;
-      if (!setter) return { ok: false, error: "No se pudo asignar files en el input" };
-      setter.call(input, transferencia.files);
       if (!input.files || input.files.length === 0) return { ok: false, error: "El input no aceptó los archivos" };
-      input.dispatchEvent(new Event("change", { bubbles: true }));
       return { ok: true, count: input.files.length };
     })()`);
     if (!estado.value?.ok) throw new Error(estado.value?.error ?? `ChatGPT rechazó los archivos`);

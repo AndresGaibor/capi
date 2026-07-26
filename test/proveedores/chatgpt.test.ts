@@ -4,10 +4,9 @@ import { scriptEnviarPromptChatGPT } from "../../src/proveedores/chatgpt/scripts
 import { scriptEstadoStreamingChatGPT } from "../../src/proveedores/chatgpt/scripts/estadoStreaming";
 import { scriptListarConversacionesChatGPT } from "../../src/proveedores/chatgpt/scripts/listarConversaciones";
 
-test("ChatGPT usa el editor textarea y el botón estable de envío", () => {
+test("ChatGPT usa el editor ProseMirror y el botón estable de envío", () => {
   const script = scriptEnviarPromptChatGPT("mensaje de prueba");
-  expect(script).toContain("textarea");
-  expect(script).toContain("prompt-textarea");
+  expect(script).toContain(".ProseMirror");
   expect(script).toContain("send-button");
   expect(script).toContain("composer-submit-button-color");
   expect(script).toContain("mensaje de prueba");
