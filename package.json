@@ -2,6 +2,9 @@
   "name": "capi",
   "module": "src/cli.ts",
   "type": "module",
+  "bin": {
+    "capi": "src/cli.ts"
+  },
   "private": true,
   "devDependencies": {
     "@types/bun": "latest",
