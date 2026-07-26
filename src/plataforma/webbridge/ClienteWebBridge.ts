@@ -19,14 +19,7 @@ export class ClienteWebBridge {
   }
   async navegar(url: string, nuevaPestana: boolean, tituloGrupo?: string) {
     const args = { url, newTab: nuevaPestana, group_title: tituloGrupo };
-    try {
-      return await this.comando<{ success: boolean }>("navigate", args);
-    } catch (error) {
-      const mensaje = error instanceof Error ? error.message : String(error);
-      if (!/tab was closed|session .* closed|no tab with given id/i.test(mensaje)) throw error;
-      try { await this.comando<void>("close_session"); } catch {}
-      return this.comando<{ success: boolean }>("navigate", args);
-    }
+    return this.comando<{ success: boolean }>("navigate", args);
   }
   async seleccionarPestanaActiva(url = "https://chatgpt.com") {
     await this.comando("find_tab", { url, active: true });

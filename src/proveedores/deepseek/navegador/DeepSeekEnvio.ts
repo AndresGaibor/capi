@@ -99,9 +99,9 @@ export class DeepSeekEnvio implements EstrategiaAdjuntos {
 
   async enviar(prompt: string): Promise<void> {
     if (this.transporte.rellenar) await new EscritorEditorWeb(this.transporte).escribir(SELECTORES_DEEPSEEK.textarea, prompt);
-    const rutaInicial = (await this.transporte.evaluar<string>('location.pathname')).value ?? '';
     const resultado = await this.transporte.evaluar<{ok:boolean;error?:string;x?:number;y?:number}>(scriptEnviarPromptDeepSeek(prompt));
     if (!resultado.value?.ok) throw new ErrorPaginaProveedor(resultado.value?.error ?? 'No se pudo enviar el prompt a DeepSeek');
+    let clicRealizado = false;
     if (this.transporte.cdp && Number.isFinite(resultado.value.x) && Number.isFinite(resultado.value.y)) {
       const x = resultado.value.x as number;
       const y = resultado.value.y as number;
@@ -109,36 +109,36 @@ export class DeepSeekEnvio implements EstrategiaAdjuntos {
         await this.transporte.cdp('Input.dispatchMouseEvent', { type:'mouseMoved', x, y });
         await this.transporte.cdp('Input.dispatchMouseEvent', { type:'mousePressed', x, y, button:'left', clickCount:1 });
         await this.transporte.cdp('Input.dispatchMouseEvent', { type:'mouseReleased', x, y, button:'left', clickCount:1 });
+        clicRealizado = true;
       } catch {
-        await this.transporte.evaluar(`document.elementFromPoint(${x},${y})?.click()`);
+        clicRealizado = Boolean((await this.transporte.evaluar<boolean>(`(() => { const el = document.elementFromPoint(${x},${y}); if (!(el instanceof HTMLElement)) return false; el.click(); return true; })()`)).value);
       }
+    } else {
+      clicRealizado = Boolean((await this.transporte.evaluar<boolean>(`(() => {
+        const textarea = document.querySelector('textarea[name="search"]');
+        const compositor = textarea?.closest('form') || textarea?.parentElement?.parentElement?.parentElement || document;
+        const btn = [...compositor.querySelectorAll('div[role="button"], button')].find(b => {
+          const r = b.getBoundingClientRect(); const s = getComputedStyle(b);
+          return r.width > 0 && r.height > 0 && s.display !== 'none' && s.visibility !== 'hidden' && !b.disabled;
+        });
+        if (!(btn instanceof HTMLElement)) return false;
+        btn.click();
+        return true;
+      })()`)).value);
     }
-    await this.transporte.evaluar(`(() => {
-      const textarea = document.querySelector('textarea[name="search"]');
-      const compositor = textarea?.closest('form') || textarea?.parentElement?.parentElement?.parentElement || document;
-      const btn = [...compositor.querySelectorAll('div[role="button"], button')].find(b => {
-        const r = b.getBoundingClientRect(); const s = getComputedStyle(b);
-        return r.width > 0 && r.height > 0 && s.display !== 'none' && s.visibility !== 'hidden' && !b.disabled;
-      });
-      btn?.click();
-    })()`);
+    if (!clicRealizado) throw new ErrorPaginaProveedor('DeepSeek: no se pudo ejecutar el clic de envío');
     for (let intento = 0; intento < 80; intento++) {
-      const estado = await this.transporte.evaluar<{mensajeAparecio:boolean;entradaVacia:boolean;conversacionNueva:boolean;stopVisible:boolean;completionIniciada:boolean}>(`(() => {
-        const entrada = document.querySelector(${JSON.stringify(SELECTORES_DEEPSEEK.textarea)});
-        const valor = entrada ? ('value' in entrada ? String(entrada.value || '') : String(entrada.textContent || '')) : '';
+      const estado = await this.transporte.evaluar<{mensajeAparecio:boolean;stopVisible:boolean;completionIniciada:boolean}>(`(() => {
         const envio = window.__capiDeepSeekEnvio || {};
         const texto = document.body.innerText || '';
         return {
           mensajeAparecio: Boolean(envio.prompt && texto.includes(envio.prompt)),
-          entradaVacia: !entrada || valor.trim() === '',
-          conversacionNueva: location.pathname.includes('/a/chat/s/') && location.pathname !== ${JSON.stringify(rutaInicial)},
           stopVisible: [...document.querySelectorAll('button,[role="button"]')].some(b => /stop|detener/i.test(b.getAttribute('aria-label') || b.textContent || '')),
           completionIniciada: Boolean(window.__capiDeepSeekCompletion?.raw || window.__capiDeepSeekCompletion?.done)
         };
       })()`);
-      const confirmado = estado.value && (estado.value.mensajeAparecio || estado.value.entradaVacia || estado.value.conversacionNueva || estado.value.stopVisible || estado.value.completionIniciada);
-      if (confirmado) return;
-      if (intento === 20 && !confirmado) {
+      if (estado.value?.mensajeAparecio || estado.value?.completionIniciada || estado.value?.stopVisible) return;
+      if (intento === 20) {
         await this.transporte.evaluar(`(() => {
           const textarea = document.querySelector(${JSON.stringify(SELECTORES_DEEPSEEK.textarea)});
           textarea?.focus();

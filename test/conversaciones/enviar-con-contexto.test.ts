@@ -46,15 +46,15 @@ test("ante alta demanda baja de preview a max y continúa", async () => {
   expect(eventos.some((e) => e.contenido === "OK")).toBeTrue();
 });
 
-test("DeepSeek degrada de expert a default en la misma conversación", async () => {
+test("DeepSeek reintenta de expert a default sin abrir nueva pestaña", async () => {
   const peticiones: any[] = [];
   const proveedor: any = { id: "deepseek", async *enviarMensaje(p: any) { peticiones.push(p); if (p.modelo === "expert") throw new Error("Server is busy."); yield { tipo: "respuesta", contenido: "OK" }; yield { tipo: "fin" } }, obtenerConversacionActual: async () => "nueva-default" };
   const proveedores: any = { obtener: () => proveedor };
   const gestor: any = { seleccionar: () => ({ proyecto: { id: "p", nombre: "P" }, seleccion: { conversacionId: "chat-expert", motivo: "reciente_ruta" } }) };
   const repo: any = { ...mockRepoCompleto, listarConversacionesProyecto: () => [{ id: "chat-expert" }] };
   for await (const _ of new EnviarMensajeConContexto(proveedores, gestor, repo).ejecutar("deepseek", { prompt: "hola", modelo: "expert" })) {}
-  expect(peticiones[0]).toMatchObject({ modelo: "expert", conversacionId: "chat-expert" });
-  expect(peticiones[1]).toMatchObject({ modelo: "default", conversacionId: "chat-expert", nuevaPestana: true });
+  expect(peticiones[0]).toMatchObject({ modelo: "expert", conversacionId: "chat-expert", nuevaPestana: undefined });
+  expect(peticiones[1]).toMatchObject({ modelo: "default", conversacionId: "chat-expert", nuevaPestana: false });
 });
 
 test("empaqueta múltiples fuentes y entrega un solo txt al proveedor", async () => {

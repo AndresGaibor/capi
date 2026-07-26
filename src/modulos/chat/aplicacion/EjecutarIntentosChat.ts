@@ -41,7 +41,7 @@ export class EjecutarIntentosChat {
           {
             ...peticion,
             modelo: intento.modelo,
-            nuevaPestana: peticion.nuevaPestana || indice > 0,
+            nuevaPestana: indice === 0 ? peticion.nuevaPestana : false,
           },
           conversacionId,
         )) {

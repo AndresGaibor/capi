@@ -149,7 +149,7 @@ export class ChatGPTPaginaChat {
           await this.transporte.cdp("Input.dispatchKeyEvent", { type: "keyUp", key: "Backspace", code: "Backspace" });
           await this.transporte.cdp("Input.insertText", { text: prompt });
           let enviado = false;
-          for (let intento = 0; intento < 30; intento++) {
+          for (let intento = 0; intento < 5; intento++) {
             const clic = await this.transporte.evaluar<boolean>(`(() => {
               const btn=[...document.querySelectorAll(${JSON.stringify(SELECTORES_CHATGPT.enviar)})]
                 .find(b=>b instanceof HTMLButtonElement && !b.disabled);
