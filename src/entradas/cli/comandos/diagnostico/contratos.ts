@@ -4,7 +4,7 @@ import { crearSobreExito, serializarSalida, type FormatoSalida } from "../../age
 
 export const comandoDiagnosticoContratos = defineCommand({
   meta: { name: "contratos", description: "Verificar contratos reales de navegación y modelos por proveedor" },
-  args: { output: { type: "string", alias: "o", default: "human" } },
+  args: { output: { type: "string", alias: "o", default: "markdown" } },
   async run({ args }) {
     const resultado = await crearAplicacion().verificarContratosProveedor.ejecutar();
     const formato = String(args.output) as FormatoSalida;

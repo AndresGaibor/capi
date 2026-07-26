@@ -30,7 +30,7 @@ export const comandoDiagnosticoCompleto = defineCommand({
   meta: { name: "completo", description: "Diagnosticar proyecto, persistencia y proveedores" },
   args: {
     json: { type: "boolean", description: "Salida JSON estructurada" },
-    output: { type: "string", default: "human", description: "human|json" },
+    output: { type: "string", default: "markdown", description: "markdown|human|json" },
     repair: { type: "boolean", default: false, description: "Intentar reparar automáticamente WebBridge y sesiones" },
   },
   run: ({ args }) => ejecutarComando(async () => {

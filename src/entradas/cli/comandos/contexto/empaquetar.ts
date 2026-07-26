@@ -10,7 +10,7 @@ export const comandoContextoEmpaquetar = defineCommand({
     fuentes: { type: "positional", default: ".", description: "Lista separada por comas, JSON o @archivo-lista" },
     diff: { type: "boolean", description: "Incluir cambios staged y unstaged" },
     limite: { type: "string", description: "Máximo en bytes", default: String(4 * 1024 * 1024) },
-    output: { type: "string", alias: "o", default: "human", description: "human|markdown|json" },
+    output: { type: "string", alias: "o", default: "markdown", description: "markdown|human|json" },
   },
   async run({ args }) {
     const app = crearAplicacion();

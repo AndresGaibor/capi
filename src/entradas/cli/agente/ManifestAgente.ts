@@ -9,7 +9,7 @@ export interface EsquemaComandoAgente {
   errors: Array<{ code: string; retryable: boolean; recovery: string }>;
 }
 
-const output = { type: "string", enum: ["human", "markdown", "json", "jsonl"], default: "human", description: "Formato estable de salida. Usa json o jsonl para agentes." };
+const output = { type: "string", enum: ["markdown", "human", "json", "jsonl"], default: "markdown", description: "Formato de salida. markdown (por defecto, legible por IA), human (ANSI para terminal), json, jsonl." };
 
 const comandos: EsquemaComandoAgente[] = [
   {
@@ -161,7 +161,7 @@ const comandos: EsquemaComandoAgente[] = [
   {
     name: "conversations.project", description: "Listar historial de conversaciones del proyecto (incluye archivadas con --archivadas).",
     examples: ['capi conversaciones proyecto --output json'],
-    inputSchema: { type: "object", additionalProperties: false, required: [], properties: { archivadas: { type: "boolean", default: false }, output: { type: "string", default: "human" } } },
+    inputSchema: { type: "object", additionalProperties: false, required: [], properties: { archivadas: { type: "boolean", default: false }, output: { type: "string", default: "markdown" } } },
     behavior: { nonInteractive: true, streaming: false, idempotent: true, sideEffects: [] }, errors: [],
   },
   {

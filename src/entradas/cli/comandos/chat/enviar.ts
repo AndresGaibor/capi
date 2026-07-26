@@ -44,7 +44,7 @@ export const argumentosChat = {
   continuar: { type: "boolean" as const, description: "Solo hacer polling de la conversación actual sin enviar mensaje" },
   background: { type: "boolean" as const, description: "Ejecutar el envío como tarea de fondo" },
   fallback: { type: "boolean" as const, default: true, description: "Permitir reintentos y degradación inteligente" },
-  output: { type: "string" as const, alias: "o", default: "human", description: "human|markdown|json|jsonl" },
+  output: { type: "string" as const, alias: "o", default: "markdown", description: "markdown|human|json|jsonl" },
   requestId: { type: "string" as const, description: "Identificador correlacionable de la petición" },
   dryRun: { type: "boolean" as const, description: "Explicar la selección sin navegar ni enviar" },
   explain: { type: "boolean" as const, description: "Incluir decisiones de proyecto, conversación y recuperación" },

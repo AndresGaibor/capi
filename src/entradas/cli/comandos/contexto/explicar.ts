@@ -16,7 +16,7 @@ export const comandoContextoExplicar = defineCommand({
     proveedor: { type: "string", alias: "p", default: "deepseek" },
     modelo: { type: "string", alias: "m" },
     limite: { type: "string" },
-    output: { type: "string", alias: "o", default: "human" },
+    output: { type: "string", alias: "o", default: "markdown" },
   },
   async run({ args }) {
     const app = crearAplicacion();

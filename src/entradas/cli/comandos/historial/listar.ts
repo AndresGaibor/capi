@@ -4,7 +4,7 @@ import { crearSobreExito, serializarSalida, type FormatoSalida } from "../../age
 
 export const comandoHistorialListar = defineCommand({
   meta: { name: "listar", description: "Listar ejecuciones recientes del proyecto" },
-  args: { limite: { type: "string", default: "20" }, output: { type: "string", alias: "o", default: "human" } },
+  args: { limite: { type: "string", default: "20" }, output: { type: "string", alias: "o", default: "markdown" } },
   run({ args }) {
     const resultado = crearAplicacion().consultarHistorialProyecto.ejecutar(Number(args.limite));
     const formato = String(args.output) as FormatoSalida;
