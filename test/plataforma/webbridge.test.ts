@@ -54,3 +54,38 @@ test("lanza WebBridgeError tipado en lugar de string con JSON embebido", async (
   expect((errorCapturado.message)).not.toContain(JSON.stringify({ tool_error: "..." }));
   expect(errorCapturado.mensajeOriginal).toEqual({ code: "tool_error", message: "tool no encontrado" });
 });
+
+test("reintenta en errores transitorios de red (ECONNREFUSED) y recupera", async () => {
+  let intentos = 0;
+  const fetchFalso: any = async () => {
+    intentos++;
+    if (intentos <= 2) throw new TypeError("fetch failed");
+    return new Response(JSON.stringify({ ok: true, data: { tabs: [] } }));
+  };
+  const c = new ClienteWebBridge("http://bridge", fetchFalso);
+  const resultado = await c.listarPestanas();
+  expect(resultado).toEqual([]);
+  expect(intentos).toBe(3);
+});
+
+test("NO reintenta en WebBridgeError (error de la aplicación)", async () => {
+  let intentos = 0;
+  const fetchFalso: any = async () => {
+    intentos++;
+    return new Response(JSON.stringify({ ok: false, error: { code: "tool_error", message: "not found" } }));
+  };
+  const c = new ClienteWebBridge("http://bridge", fetchFalso);
+  await expect(c.listarPestanas()).rejects.toThrow(WebBridgeError);
+  expect(intentos).toBe(1);
+});
+
+test("NO reintenta en errores no transitorios", async () => {
+  let intentos = 0;
+  const fetchFalso: any = async () => {
+    intentos++;
+    throw new Error("algo raro paso");
+  };
+  const c = new ClienteWebBridge("http://bridge", fetchFalso);
+  await expect(c.listarPestanas()).rejects.toThrow("algo raro paso");
+  expect(intentos).toBe(1);
+});
