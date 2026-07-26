@@ -64,6 +64,7 @@ export class ChatGPTPaginaChat {
       if (listo.value) return;
       await dormir(300);
     }
+    throw new ErrorPaginaProveedor(`El input de archivos de ChatGPT no aparecio tras ${timeoutMs}ms`);
   }
 
   private normalizarUrlConversacion(id: string): string {
@@ -224,7 +225,7 @@ export class ChatGPTPaginaChat {
       for (let inicio = 0; inicio < arch.base64.length; inicio += 256 * 1024) {
         await this.transporte.evaluar(`window[${JSON.stringify(clave)}].push(${JSON.stringify(arch.base64.slice(inicio, inicio + 256 * 1024))})`);
       }
-      await this.transporte.evaluar(`(() => {
+      const adjunto = await this.transporte.evaluar<{ ok: boolean; error?: string; count?: number }>(`(() => {
         const bin = atob(window[${JSON.stringify(clave)}].join(""));
         delete window[${JSON.stringify(clave)}];
         const bytes = new Uint8Array(bin.length);
@@ -236,9 +237,14 @@ export class ChatGPTPaginaChat {
         if (input.files) { for (const f of input.files) dt.items.add(f); }
         dt.items.add(archivo);
         input.files = dt.files;
-        input.dispatchEvent(new Event("change", { bubbles: true }));
+        for (const tipo of ["input", "change"]) {
+          input.dispatchEvent(new Event(tipo, { bubbles: true, composed: true }));
+        }
         return { ok: true, count: input.files.length };
       })()`);
+      if (!adjunto.value?.ok) {
+        throw new ErrorPaginaProveedor(adjunto.value?.error ?? `ChatGPT no acepto ${arch.nombre}`);
+      }
     }
     const estado = await this.transporte.evaluar<{ ok: boolean; error?: string; count?: number }>(`(() => {
       const input = document.querySelector(${JSON.stringify(selector)});
@@ -255,8 +261,8 @@ export class ChatGPTPaginaChat {
     let ultimoCambio = Date.now();
     let fallosConsecutivos = 0;
     const MAX_FALLOS_EVALUAR = 3;
-    const TIMEOUT_MAXIMO_MS = 5 * 60_000;
-    const TIMEOUT_INACTIVIDAD_MS = 45_000;
+    const TIMEOUT_MAXIMO_MS = 10 * 60_000;
+    const TIMEOUT_INACTIVIDAD_MS = 120_000;
     const inicio = Date.now();
     const supervisor = new SupervisorStreamingProveedor(configuracionProveedor("chatgpt"), Date.now());
     for (;;) {

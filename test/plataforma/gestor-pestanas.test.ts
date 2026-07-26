@@ -6,6 +6,11 @@ test("reutiliza una pestaña raíz compatible", async () => {
   expect(await new GestorPestanas(transporte).planificar("qwen")).toMatchObject({ accion:"reutilizar", pestana:{targetId:"1"} });
 });
 
+test("administra pestañas persistentes de ChatGPT igual que otros proveedores", async () => {
+  const transporte:any={ cdp:async()=>({targetInfos:[{targetId:"gpt-1",url:"https://chatgpt.com/",type:"page"}]}) };
+  expect(await new GestorPestanas(transporte).planificar("chatgpt")).toMatchObject({ accion:"reutilizar", pestana:{targetId:"gpt-1"} });
+});
+
 test("rechaza abrir más pestañas que el límite", async () => {
   const transporte:any={ cdp:async()=>({targetInfos:[{targetId:"1",url:"https://chat.deepseek.com/a/chat/s/1",type:"page"},{targetId:"2",url:"https://chat.deepseek.com/a/chat/s/2",type:"page"}]}) };
   expect(new GestorPestanas(transporte,2).planificar("deepseek")).rejects.toThrow("límite de 2");

@@ -17,18 +17,24 @@ export class GestorPestanas {
     }
   }
 
-  async validarNuevaPestana(proveedor: "qwen" | "deepseek"): Promise<void> {
-    const host = proveedor === "qwen" ? "chat.qwen.ai" : "chat.deepseek.com";
+  async validarNuevaPestana(proveedor: "qwen" | "deepseek" | "chatgpt"): Promise<void> {
+    const host = this.hostProveedor(proveedor);
     const compatibles = (await this.listar()).filter(p => p.url.includes(host));
     if (compatibles.length >= this.limitePorProveedor) throw new Error(`Se alcanzó el límite de ${this.limitePorProveedor} pestañas administradas para ${proveedor}.`);
   }
 
-  async planificar(proveedor: "qwen" | "deepseek"): Promise<{ accion: "reutilizar" | "abrir"; pestana?: PestanaNavegador }> {
-    const host = proveedor === "qwen" ? "chat.qwen.ai" : "chat.deepseek.com";
+  async planificar(proveedor: "qwen" | "deepseek" | "chatgpt"): Promise<{ accion: "reutilizar" | "abrir"; pestana?: PestanaNavegador }> {
+    const host = this.hostProveedor(proveedor);
     const compatibles = (await this.listar()).filter(p => p.url.includes(host));
     const libre = compatibles.find(p => /\/$|\/chat\/?$/.test(new URL(p.url).pathname));
     if (libre) return { accion: "reutilizar", pestana: libre };
     if (compatibles.length >= this.limitePorProveedor) throw new Error(`Se alcanzó el límite de ${this.limitePorProveedor} pestañas administradas para ${proveedor}.`);
     return { accion: "abrir" };
+  }
+
+  private hostProveedor(proveedor: "qwen" | "deepseek" | "chatgpt"): string {
+    if (proveedor === "qwen") return "chat.qwen.ai";
+    if (proveedor === "deepseek") return "chat.deepseek.com";
+    return "chatgpt.com";
   }
 }
