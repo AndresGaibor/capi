@@ -21,6 +21,7 @@ class TransporteChatGPT {
   async evaluar<T>(codigo: string) {
     if (codigo === "location.hostname") return { value: "chatgpt.com" as T };
     if (codigo === "location.href") return { value: "https://chatgpt.com/c/chat-1" as T };
+    if (codigo.includes(".ProseMirror") && codigo.includes("Boolean(document.querySelector")) return { value: true as T };
     if (codigo.includes("const enlaces")) return { value: [{ href: "https://chatgpt.com/c/a?x=1", titulo: " A " }, { href: "https://chatgpt.com/c/a", titulo: "A" }] as T };
     if (codigo.includes("isGenerating")) return { value: { turns: this.estados++, response: "respuesta", done: false, isGenerating: false } as T };
     if (codigo.includes("attachment-chip")) return { value: true as T };
@@ -28,6 +29,53 @@ class TransporteChatGPT {
     return { value: undefined as T };
   }
 }
+
+test("ChatGPT abre una pestaña cuando la sesión WebBridge no tiene una asociada", async () => {
+  const navegadas: string[] = [];
+  const transporte: any = {
+    async estaDisponible() { return true; },
+    async seleccionarPestanaPorHost() { return false; },
+    async seleccionarPestanaActiva() { throw new Error("no debe exigir pestaña foreground"); },
+    async navegar(url: string) { navegadas.push(url); },
+    async evaluar(codigo: string) {
+      if (codigo === "location.hostname") return { value: "chatgpt.com" };
+      return { value: undefined };
+    },
+  };
+  await new ChatGPTPaginaChat(transporte).verificarDisponibilidad();
+  expect(navegadas).toEqual(["https://chatgpt.com/"]);
+});
+
+test("ChatGPT con CDP no acepta solo el textarea antes de ProseMirror", async () => {
+  let intentosProseMirror = 0;
+  const transporte: any = {
+    async navegar() {},
+    async cdp() {},
+    async evaluar(codigo: string) {
+      if (codigo === "location.href") return { value: "https://chatgpt.com/" };
+      if (codigo.includes(".ProseMirror") && !codigo.includes("textarea[aria-label")) return { value: ++intentosProseMirror >= 3 };
+      if (codigo.includes("textarea[aria-label")) return { value: true };
+      return { value: undefined };
+    },
+  };
+  await new ChatGPTPaginaChat(transporte).abrirConversacion();
+  expect(intentosProseMirror).toBe(3);
+});
+
+test("ChatGPT espera ProseMirror después de abrir una conversación", async () => {
+  let intentosEditor = 0;
+  const transporte: any = {
+    async navegar() {},
+    async cdp() {},
+    async evaluar(codigo: string) {
+      if (codigo === "location.href") return { value: "https://chatgpt.com/" };
+      if (codigo.includes(".ProseMirror")) return { value: ++intentosEditor >= 3 };
+      return { value: undefined };
+    },
+  };
+  await new ChatGPTPaginaChat(transporte).abrirConversacion();
+  expect(intentosEditor).toBe(3);
+});
 
 test("ChatGPTPaginaChat verifica, canonicaliza conversaciones, envía y diagnostica", async () => {
   const transporte = new TransporteChatGPT();
@@ -39,6 +87,74 @@ test("ChatGPTPaginaChat verifica, canonicaliza conversaciones, envía y diagnost
   await pagina.enviar("hola");
   expect(await pagina.obtenerConversacionActual()).toBe("https://chatgpt.com/c/chat-1");
   expect((await pagina.diagnosticar()).proveedor).toBe("chatgpt");
+});
+
+test("ChatGPT usa ProseMirror con CDP y clic DOM cuando fill falla", async () => {
+  let insercion = "";
+  let clicsDom = 0;
+  let lecturasEstado = 0;
+  const transporte: any = {
+    async estaDisponible() { return true; },
+    async rellenar() { throw new Error("fill: Uncaught"); },
+    async click() { throw new Error("click: Uncaught"); },
+    async cdp(metodo: string, parametros: any = {}) {
+      if (metodo === "Input.insertText") insercion = String(parametros.text ?? "");
+      return {};
+    },
+    async evaluar(codigo: string) {
+      if (codigo.includes("isGenerating")) {
+        lecturasEstado++;
+        return { value: lecturasEstado === 1 ? { turns: 0, response: "", done: false, isGenerating: false } : { turns: 1, response: "OK", done: false, isGenerating: false } };
+      }
+      if (codigo.includes(".ProseMirror") && codigo.includes("focus")) return { value: true };
+      if (codigo.includes("btn.click()")) { clicsDom++; return { value: true }; }
+      if (codigo.includes("Boolean(document.querySelector")) return { value: false };
+      return { value: undefined };
+    },
+  };
+  await new ChatGPTPaginaChat(transporte).enviar("PROMPT_CHATGPT");
+  expect(insercion).toBe("PROMPT_CHATGPT");
+  expect(clicsDom).toBe(1);
+});
+
+test("ChatGPT activa foco y lifecycle antes de insertar en ProseMirror", async () => {
+  const metodos: string[] = [];
+  let lecturasEstado = 0;
+  const transporte: any = {
+    async cdp(metodo: string) { metodos.push(metodo); return {}; },
+    async evaluar(codigo: string) {
+      if (codigo.includes("isGenerating")) {
+        lecturasEstado++;
+        return { value: lecturasEstado === 1 ? { turns: 0, response: "", done: false, isGenerating: false } : { turns: 1, response: "OK", done: false, isGenerating: false } };
+      }
+      if (codigo.includes(".ProseMirror") && codigo.includes("focus")) return { value: true };
+      if (codigo.includes("btn.click()")) return { value: true };
+      if (codigo.includes("Boolean(document.querySelector")) return { value: false };
+      return { value: undefined };
+    },
+  };
+  await new ChatGPTPaginaChat(transporte).enviar("PROMPT_ACTIVO");
+  expect(metodos.slice(0, 2)).toEqual(["Emulation.setFocusEmulationEnabled", "Page.setWebLifecycleState"]);
+  expect(metodos).toContain("Input.insertText");
+});
+
+test("todos los scripts generados por el envío de ChatGPT compilan", async () => {
+  let lecturasEstado = 0;
+  const transporte: any = {
+    async cdp() { return {}; },
+    async evaluar(codigo: string) {
+      expect(() => new Function(`return (${codigo})`)).not.toThrow();
+      if (codigo.includes("isGenerating")) {
+        lecturasEstado++;
+        return { value: lecturasEstado === 1 ? { turns: 0, response: "", done: false, isGenerating: false } : { turns: 0, response: "", done: false, isGenerating: false } };
+      }
+      if (codigo.includes(".ProseMirror") && codigo.includes("focus")) return { value: true };
+      if (codigo.includes("btn.click()")) return { value: true };
+      if (codigo.includes("Boolean(document.querySelector")) return { value: true };
+      return { value: undefined };
+    },
+  };
+  await new ChatGPTPaginaChat(transporte).enviar("PROMPT_COMPILA");
 });
 
 test("ChatGPTPaginaChat adjunta archivos mediante CDP y confirma el chip", async () => {

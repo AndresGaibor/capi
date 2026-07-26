@@ -20,8 +20,8 @@ export class QwenStreaming{
    return valor&&typeof valor.contenido==='string'&&typeof valor.terminado==='boolean'?valor:{contenido:'',pensamiento:'',terminado:false};
   }catch{return{contenido:'',pensamiento:'',terminado:false}}
  }
- async *observar():AsyncGenerator<EventoStreaming>{
-  let ultimoPensamiento='',ultimaRespuesta='',observada='',ultimoCambio=this.ahora(),ultimoSnapshot=0,ultimoHeartbeat=0,fallos=0,urlRecuperacion:string|undefined,conversacion:string|undefined,estancado=false,eleccionIntentada=false,regeneracionIntentada=false,vaciosFinales=0,iteracion=0,respuestaHistorial='',historialTerminado=false;
+ async *observar(conversacionInicial?:string):AsyncGenerator<EventoStreaming>{
+  let ultimoPensamiento='',ultimaRespuesta='',observada='',ultimoCambio=this.ahora(),ultimoSnapshot=0,ultimoHeartbeat=0,fallos=0,urlRecuperacion=conversacionInicial?`https://chat.qwen.ai/c/${conversacionInicial}`:undefined,conversacion=conversacionInicial,estancado=false,eleccionIntentada=false,regeneracionIntentada=false,vaciosFinales=0,iteracion=0,respuestaHistorial='',historialTerminado=false;
   const lector=new LectorTelemetriaQwen(this.transporte,this.ahora); const progreso=new DetectorProgresoProveedor(this.ahora());
   while(true){
    iteracion++;

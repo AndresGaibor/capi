@@ -16,7 +16,7 @@ class TransporteQwen {
     if (codigo.includes("const texto = document.body.innerText")) {
       return { value: { visible: true, procesando: false, error: "" } as T };
     }
-    if (codigo.includes("conversacionNueva")) return { value: { vacio: true, conversacionNueva: false } as T };
+    if (codigo.includes("conversacionNueva")) return { value: { promptAparecio: true, entradaVacia: true, conversacionNueva: false, conversacionId: "c1", generando: false } as T };
     if (codigo.includes("new File")) return { value: { ok: true } as T };
     return { value: 0 as T };
   }

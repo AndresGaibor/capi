@@ -8,7 +8,7 @@ export function scriptEstadoStreamingChatGPT(): string {
     const contenido = ultimo?.querySelector('[data-message-author-role="assistant"]') || ultimo;
     const markdown = contenido?.querySelector('.markdown') || contenido;
     const respuesta = (markdown?.innerText || markdown?.textContent || "").trim();
-    const generando = Boolean(document.querySelector(${JSON.stringify(SELECTORES_CHATGPT.detener)}));
+    const generando = Boolean(document.querySelector(${JSON.stringify(SELECTORES_CHATGPT.detener)}) || document.querySelector('[data-stream-active]'));
     const continueGenerating = Boolean(document.querySelector('[data-testid="continue-generating-button"], button[aria-label*="Continue generating"], button[aria-label*="Continuar generando"]'));
     const images = [...(markdown?.querySelectorAll('img') ?? [])]
       .map(img => ({ url: img.currentSrc || img.src, alt: img.alt || undefined, width: img.width }))

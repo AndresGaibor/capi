@@ -27,7 +27,7 @@ export class ChatGPTPaginaChat {
     const disponible = await this.transporte.estaDisponible();
     if (!disponible) throw new Error("WebBridge no está disponible para ChatGPT");
     const seleccionada = await this.transporte.seleccionarPestanaPorHost?.("chatgpt.com");
-    if (!seleccionada) await this.transporte.seleccionarPestanaActiva?.("https://chatgpt.com");
+    if (!seleccionada) await this.transporte.navegar("https://chatgpt.com/", false, "CAPI ChatGPT");
     await this.esperarHostnameChatGPT(5000);
   }
 
@@ -39,6 +39,20 @@ export class ChatGPTPaginaChat {
       await dormir(200);
     }
     throw new Error("La pestaña activa no es ChatGPT o no está lista");
+  }
+
+
+  private async esperarEditorChatGPT(timeoutMs = 15000): Promise<void> {
+    const selector = this.transporte.cdp
+      ? '.ProseMirror[contenteditable="true"]'
+      : 'textarea[aria-label*="ChatGPT" i], textarea[aria-label*="Chatear" i], textarea[name="prompt-textarea"]';
+    const inicio = Date.now();
+    while (Date.now() - inicio < timeoutMs) {
+      const listo = await this.transporte.evaluar<boolean>(`Boolean(document.querySelector(${JSON.stringify(selector)}))`);
+      if (listo.value) return;
+      await dormir(200);
+    }
+    throw new Error("El editor de ChatGPT no apareció");
   }
 
   private normalizarUrlConversacion(id: string): string {
@@ -65,13 +79,17 @@ export class ChatGPTPaginaChat {
   async abrirConversacion(id?: string, nuevaPestana = false): Promise<void> {
     if (!id) {
       const actual = await this.obtenerConversacionActual();
-      if (actual) return;
-      await this.transporte.navegar("https://chatgpt.com/", nuevaPestana, "CAPI ChatGPT");
+      if (!actual) await this.transporte.navegar("https://chatgpt.com/", nuevaPestana, "CAPI ChatGPT");
+      await this.esperarEditorChatGPT();
       return;
     }
     const url = normalizarUrlConversacion(id);
-    if (!nuevaPestana && (await this.obtenerConversacionActual()) === url) return;
+    if (!nuevaPestana && (await this.obtenerConversacionActual()) === url) {
+      await this.esperarEditorChatGPT();
+      return;
+    }
     await this.transporte.navegar(url, nuevaPestana, "CAPI ChatGPT");
+    await this.esperarEditorChatGPT();
     this.asistentesAntes = 0;
     this.respuestaAntes = "";
     this.ocupado = false;
@@ -103,6 +121,12 @@ export class ChatGPTPaginaChat {
       });
   }
 
+  private async activarPagina(): Promise<void> {
+    if (!this.transporte.cdp) return;
+    try { await this.transporte.cdp("Emulation.setFocusEmulationEnabled", { enabled: true }); } catch {}
+    try { await this.transporte.cdp("Page.setWebLifecycleState", { state: "active" }); } catch {}
+  }
+
   async enviar(prompt: string): Promise<void> {
     if (this.ocupado) throw new Error("ChatGPT ya tiene una operación en curso");
     this.ocupado = true;
@@ -110,6 +134,36 @@ export class ChatGPTPaginaChat {
       const antes = await this.transporte.evaluar<{ turns: number; response: string }>(scriptEstadoStreamingChatGPT());
       this.asistentesAntes = antes.value?.turns ?? 0;
       this.respuestaAntes = antes.value?.response ?? "";
+      if (this.transporte.cdp) {
+        await this.activarPagina();
+        const editorRico = await this.transporte.evaluar<boolean>(`(() => {
+          const editor=document.querySelector('.ProseMirror[contenteditable="true"]');
+          if (!(editor instanceof HTMLElement)) return false;
+          editor.focus();
+          return true;
+        })()`);
+        if (editorRico.value) {
+          await this.transporte.cdp("Input.dispatchKeyEvent", { type: "keyDown", key: "a", code: "KeyA", modifiers: 4 });
+          await this.transporte.cdp("Input.dispatchKeyEvent", { type: "keyUp", key: "a", code: "KeyA", modifiers: 4 });
+          await this.transporte.cdp("Input.dispatchKeyEvent", { type: "keyDown", key: "Backspace", code: "Backspace" });
+          await this.transporte.cdp("Input.dispatchKeyEvent", { type: "keyUp", key: "Backspace", code: "Backspace" });
+          await this.transporte.cdp("Input.insertText", { text: prompt });
+          let enviado = false;
+          for (let intento = 0; intento < 30; intento++) {
+            const clic = await this.transporte.evaluar<boolean>(`(() => {
+              const btn=[...document.querySelectorAll(${JSON.stringify(SELECTORES_CHATGPT.enviar)})]
+                .find(b=>b instanceof HTMLButtonElement && !b.disabled);
+              if (!(btn instanceof HTMLButtonElement)) return false;
+              btn.click(); return true;
+            })()`);
+            if (clic.value) { enviado = true; break; }
+            await dormir(100);
+          }
+          if (!enviado) throw new Error("No apareció el botón de envío de ChatGPT tras escribir en ProseMirror");
+          await this.confirmarEnvio();
+          return;
+        }
+      }
       if (this.transporte.rellenar) {
         await this.transporte.rellenar(SELECTORES_CHATGPT.editor, prompt);
         if (this.transporte.click) {
@@ -136,7 +190,7 @@ export class ChatGPTPaginaChat {
       if (estado.value?.error) throw new Error(`ChatGPT rechazó el envío: ${estado.value.error}`);
       if ((estado.value?.turns ?? 0) > this.asistentesAntes) return;
       if (estado.value?.response !== this.respuestaAntes && estado.value?.response !== "") return;
-      const detenido = await this.transporte.evaluar<boolean>(`Boolean(document.querySelector("${SELECTORES_CHATGPT.detener}"))`);
+      const detenido = await this.transporte.evaluar<boolean>(`Boolean(document.querySelector(${JSON.stringify(SELECTORES_CHATGPT.detener)}))`);
       if (detenido.value) return;
       await dormir(200);
     }
@@ -209,7 +263,7 @@ export class ChatGPTPaginaChat {
     if (!estado.value?.ok) throw new Error(estado.value?.error ?? `ChatGPT rechazó los archivos`);
   }
 
-  async *observar(): AsyncGenerator<EventoStreaming> {
+  async *observar(conversacionConocida?: string): AsyncGenerator<EventoStreaming> {
     let anterior = this.respuestaAntes;
     const imagenesObservadas = new Set<string>();
     let ultimoCambio = Date.now();
@@ -226,8 +280,10 @@ export class ChatGPTPaginaChat {
         fallosConsecutivos++;
         if (fallosConsecutivos >= MAX_FALLOS_EVALUAR) {
           yield { tipo: "estado", estado: "desconectado", progresoDetectado: false, estrategia: "dom", detalles: `reintento ${fallosConsecutivos}` };
-          const conversacion = await this.obtenerConversacionActual();
-          await this.transporte.recuperarPestana?.("chatgpt.com", conversacion ?? "https://chatgpt.com/");
+          const conversacion = conversacionConocida ?? await this.obtenerConversacionActual();
+          const urlRecuperacion = conversacion ? normalizarUrlConversacion(conversacion) : "https://chatgpt.com/";
+          await this.transporte.recuperarPestana?.("chatgpt.com", urlRecuperacion);
+          await this.activarPagina();
         }
         continue;
       }
@@ -259,11 +315,17 @@ export class ChatGPTPaginaChat {
     }
   }
 
-  async obtenerConversacionActual(): Promise<string | null> {
-    const resultado = await this.transporte.evaluar<string>("location.href");
-    const href = resultado.value ?? "";
-    if (!/chatgpt\.com|chat\.openai\.com/.test(href) || !/\/c\//.test(href)) return null;
-    return canonicalizarConversacion(href);
+  async obtenerConversacionActual(intentos = 1, esperaMs = 300): Promise<string | null> {
+    for (let intento = 0; intento < intentos; intento++) {
+      const resultado = await this.transporte.evaluar<string>("location.href");
+      const href = resultado.value ?? "";
+      if (/chatgpt\.com|chat\.openai\.com/.test(href) && /\/c\//.test(href)) {
+        const canonica = canonicalizarConversacion(href);
+        if (canonica && !/\/c\/WEB:/i.test(canonica)) return canonica;
+      }
+      if (intento + 1 < intentos) await dormir(esperaMs);
+    }
+    return null;
   }
 
   async diagnosticar(): Promise<Record<string, unknown>> {

@@ -31,3 +31,15 @@ test("smokes Qwen usan modo Fast",()=>{
  const fuente=readFileSync("scripts/lib/smokeDurableProveedor.ts","utf8");
  expect(fuente).toContain("args.push('--razonamiento=false')");
 });
+
+test("normaliza URL canónica de ChatGPT para navegación y comparación", async () => {
+ const { normalizarConversacionSmoke } = await import("../../scripts/lib/smokeDurableProveedor");
+ expect(normalizarConversacionSmoke("chatgpt", "https://chatgpt.com/c/abc123")).toEqual({
+  url: "https://chatgpt.com/c/abc123",
+  identificador: "abc123",
+ });
+ expect(normalizarConversacionSmoke("chatgpt", "abc123")).toEqual({
+  url: "https://chatgpt.com/c/abc123",
+  identificador: "abc123",
+ });
+});

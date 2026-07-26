@@ -47,7 +47,7 @@ export class EjecutarStreamingChat {
             ]);
       if (siguiente.done) break;
       const evento = siguiente.value;
-      if (evento.tipo === "respuesta") this.respuesta += evento.contenido;
+      if (evento.tipo === "respuesta") this.respuesta = evento.reemplazo ? evento.contenido : this.respuesta + evento.contenido;
       if (evento.tipo === "modelo") this.modelo = evento.nombre;
       if (evento.tipo === "conversacion") this.conversacionId = evento.id;
       yield evento;

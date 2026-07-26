@@ -63,15 +63,15 @@ test("ProveedorQwen configura razonamiento antes de enviar",async()=>{
 });
 
 
-test("Qwen no duplica el clic cuando CDP funciona",async()=>{
+test("Qwen no duplica el clic cuando el DOM no confirma y CDP funciona",async()=>{
  const scripts:string[]=[];let clics=0;
  const transporte:any={
-  async evaluar(codigo:string){scripts.push(codigo);if(codigo==="location.pathname")return{value:"/"};if(codigo.includes("promptAparecio"))return{value:{promptAparecio:true,entradaVacia:true,conversacionNueva:true,generando:false}};return{value:{ok:true,x:10,y:10}};},
+  async evaluar(codigo:string){scripts.push(codigo);if(codigo==="location.pathname")return{value:"/"};if(codigo.includes("btn.click(); return true"))return{value:false};if(codigo.includes("promptAparecio"))return{value:{promptAparecio:true,entradaVacia:true,conversacionNueva:true,generando:false}};return{value:{ok:true,x:10,y:10}};},
   async cdp(_m:string,p:any){if(p.type==="mouseReleased")clics++;}
  };
  await new QwenControlEnvio(transporte,async()=>{}).enviar("PROMPT_UNICO");
  expect(clics).toBe(1);
- expect(scripts.filter(c=>c.includes("btn.click(); return true"))).toHaveLength(0);
+ expect(scripts.filter(c=>c.includes("btn.click(); return true"))).toHaveLength(1);
 });
 
 test("Qwen no confirma solo por editor vacío y UUID nuevo",async()=>{

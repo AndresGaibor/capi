@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { JSDOM } from "jsdom";
 import { scriptEnviarPromptChatGPT } from "../../src/proveedores/chatgpt/scripts/enviarPrompt";
 import { scriptEstadoStreamingChatGPT } from "../../src/proveedores/chatgpt/scripts/estadoStreaming";
 import { scriptListarConversacionesChatGPT } from "../../src/proveedores/chatgpt/scripts/listarConversaciones";
@@ -17,6 +18,14 @@ test("ChatGPT extrae el último mensaje asistente y detecta generación", () => 
   expect(script).toContain("data-message-author-role");
   expect(script).toContain("isGenerating");
   expect(script).toContain("stop-button");
+});
+
+test("ChatGPT mantiene generación activa con data-stream-active", () => {
+  const dom = new JSDOM('<main data-stream-active><div data-message-author-role="assistant"><div class="markdown">C</div></div></main>', { runScripts: "outside-only" });
+  const estado = dom.window.eval(scriptEstadoStreamingChatGPT()) as any;
+  expect(estado.response).toBe("C");
+  expect(estado.isGenerating).toBeTrue();
+  expect(estado.done).toBeFalse();
 });
 
 test("ChatGPT detecta banners de error", () => {

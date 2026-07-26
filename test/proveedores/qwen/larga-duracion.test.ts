@@ -48,6 +48,18 @@ test("Qwen reintenta errores transitorios de evaluación", async () => {
   expect(eventos.map((e) => e.tipo)).toEqual(["respuesta", "fin"]);
 });
 
+test("ProveedorQwen entrega el UUID conocido al streaming para recuperación", async () => {
+  let recibido: string | undefined;
+  const pagina = {
+    verificarDisponibilidad: async () => {}, abrirConversacion: async () => {},
+    obtenerConversacionActual: async () => "chat-recuperable",
+    enviarPrompt: async () => {},
+    observarStreaming: async function* (id?: string) { recibido = id; yield { tipo: "fin" }; },
+  };
+  await recoger(new ProveedorQwen(pagina as any).enviarMensaje({ prompt: "hola" }));
+  expect(recibido).toBe("chat-recuperable");
+});
+
 test("ProveedorQwen emite conversación apenas aparece tras enviar", async () => {
   const pagina = {
     verificarDisponibilidad: async () => {}, abrirConversacion: async () => {}, seleccionarModelo: async () => ({ nombre: "modelo" }),

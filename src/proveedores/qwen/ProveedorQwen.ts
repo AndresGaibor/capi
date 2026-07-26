@@ -49,7 +49,7 @@ export class ProveedorQwen implements ProveedorChat {
       yield { tipo: "conversacion", id: conversacionActual };
     }
     yield { tipo: "inicio", mensaje: "Recibiendo respuesta..." };
-    yield* this.pagina.observarStreaming();
+    yield* this.pagina.observarStreaming(conversacionActual ?? peticion.conversacionId);
   }
   obtenerConversacionActual(): Promise<string | null> { return this.pagina.obtenerConversacionActual(); }
   diagnosticarPagina(): Promise<Record<string, unknown>> { return this.pagina.diagnosticar(); }
