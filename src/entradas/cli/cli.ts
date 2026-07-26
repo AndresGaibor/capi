@@ -55,14 +55,32 @@ export const comandoPrincipal = defineCommand({
     doctor: comandoDoctor,
     mcp: comandoMcp,
     chat: comandoChat,
-    vision: defineCommand({ meta: { name: "vision" }, subCommands: { analizar: comandoVisionAnalizar, comparar: comandoVisionComparar } }),
-    contexto: defineCommand({ meta: { name: "contexto" }, subCommands: { empaquetar: comandoContextoEmpaquetar, explicar: comandoContextoExplicar } }),
-    historial: defineCommand({ meta: { name: "historial" }, subCommands: { listar: comandoHistorialListar } }),
-    estado: defineCommand({ meta: { name: "estado" }, subCommands: { metricas: comandoEstadoMetricas, limpiar: comandoEstadoLimpiar, exportar: comandoEstadoExportar, importar: comandoEstadoImportar } }),
-    modelos: defineCommand({ meta: { name: "modelos" }, subCommands: { listar: comandoModelosListar } }),
-    proyecto: defineCommand({ meta: { name: "proyecto" }, subCommands: { actual: comandoProyectoActual, vincular: comandoProyectoVincular, desvincular: comandoProyectoDesvincular, configurar: comandoProyectoConfigurar, preferencias: comandoProyectoPreferencias } }),
+    vision: defineCommand({
+      meta: { name: "vision", description: "Analizar y comparar imágenes delegando a un modelo visual" },
+      subCommands: { analizar: comandoVisionAnalizar, comparar: comandoVisionComparar },
+    }),
+    contexto: defineCommand({
+      meta: { name: "contexto", description: "Empaquetar y explicar el contexto del proyecto" },
+      subCommands: { empaquetar: comandoContextoEmpaquetar, explicar: comandoContextoExplicar },
+    }),
+    historial: defineCommand({
+      meta: { name: "historial", description: "Auditar ejecuciones recientes del proyecto" },
+      subCommands: { listar: comandoHistorialListar },
+    }),
+    estado: defineCommand({
+      meta: { name: "estado", description: "Metricas, limpieza, exportacion e importacion del estado del proyecto" },
+      subCommands: { metricas: comandoEstadoMetricas, limpiar: comandoEstadoLimpiar, exportar: comandoEstadoExportar, importar: comandoEstadoImportar },
+    }),
+    modelos: defineCommand({
+      meta: { name: "modelos", description: "Listar modelos disponibles por proveedor" },
+      subCommands: { listar: comandoModelosListar },
+    }),
+    proyecto: defineCommand({
+      meta: { name: "proyecto", description: "Consultar y configurar el proyecto detectado" },
+      subCommands: { actual: comandoProyectoActual, vincular: comandoProyectoVincular, desvincular: comandoProyectoDesvincular, configurar: comandoProyectoConfigurar, preferencias: comandoProyectoPreferencias },
+    }),
     conversaciones: defineCommand({
-      meta: { name: "conversaciones" },
+      meta: { name: "conversaciones", description: "Gestionar conversaciones del proyecto" },
       subCommands: {
         listar: comandoConversacionesListar,
         mensajes: comandoConversacionesMensajes,
@@ -76,10 +94,22 @@ export const comandoPrincipal = defineCommand({
         usar: crearComandoEstado("usar", "principal"),
       },
     }),
-    sesion: defineCommand({ meta: { name: "sesion" }, subCommands: { importar: comandoSesionImportar } }),
-    diagnostico: defineCommand({ meta: { name: "diagnostico" }, subCommands: { pagina: comandoDiagnosticoPagina, completo: comandoDiagnosticoCompleto, contratos: comandoDiagnosticoContratos, ejecucion: comandoDiagnosticoEjecucion, red: comandoDiagnosticoRed } }),
-    servidor: defineCommand({ meta: { name: "servidor" }, subCommands: { iniciar: serveCommand } }),
-    tareas: defineCommand({ meta: { name: "tareas" }, subCommands: { listar: comandoTareasListar, estado: comandoTareasEstado, seguir: comandoTareasSeguir, cancelar: comandoTareasCancelar, reanudar: comandoTareasReanudar, compactar: comandoTareasCompactar, limpiar: comandoTareasLimpiar, metricas: comandoTareasMetricas, logs: comandoTareasLogs } }),
+    sesion: defineCommand({
+      meta: { name: "sesion", description: "Importar la sesion del navegador al proyecto" },
+      subCommands: { importar: comandoSesionImportar },
+    }),
+    diagnostico: defineCommand({
+      meta: { name: "diagnostico", description: "Diagnosticar pagina, proveedores y ejecuciones durables" },
+      subCommands: { pagina: comandoDiagnosticoPagina, completo: comandoDiagnosticoCompleto, contratos: comandoDiagnosticoContratos, ejecucion: comandoDiagnosticoEjecucion, red: comandoDiagnosticoRed },
+    }),
+    servidor: defineCommand({
+      meta: { name: "servidor", description: "Iniciar el bridge local para recibir sesiones" },
+      subCommands: { iniciar: serveCommand },
+    }),
+    tareas: defineCommand({
+      meta: { name: "tareas", description: "Listar, seguir y cancelar ejecuciones durables en segundo plano" },
+      subCommands: { listar: comandoTareasListar, estado: comandoTareasEstado, seguir: comandoTareasSeguir, cancelar: comandoTareasCancelar, reanudar: comandoTareasReanudar, compactar: comandoTareasCompactar, limpiar: comandoTareasLimpiar, metricas: comandoTareasMetricas, logs: comandoTareasLogs },
+    }),
   },
 });
 export function normalizarArgumentosCli(argumentos: string[]): string[] {
@@ -95,9 +125,9 @@ export function normalizarArgumentosCli(argumentos: string[]): string[] {
 export function ejecutarCli(): void {
   const rawArgs = process.argv.slice(2);
   const resultadoArgs = validarArgumentosDesconocidos(rawArgs, comandoPrincipal);
-  const { ok, unknowns, suggestions, available, command } = resultadoArgs;
+  const { ok, unknowns, suggestions, available, command, subcommandSuggestions } = resultadoArgs;
   if (!ok) {
-    mostrarErrorYHelp(command, unknowns, suggestions, available);
+    mostrarErrorYHelp(command, unknowns, suggestions, available, subcommandSuggestions);
     process.exit(1);
   }
   void runMain(comandoPrincipal, { rawArgs: normalizarArgumentosCli(rawArgs) });

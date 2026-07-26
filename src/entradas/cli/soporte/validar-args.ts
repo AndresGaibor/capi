@@ -21,24 +21,63 @@ function distancia(a: string, b: string): number {
   return fila[b.length]!;
 }
 
-function resolverComando(raiz: DefinicionComando, rawArgs: string[]): { nombre: string; definicion: DefinicionComando } {
+function subComandosDe(definicion: DefinicionComando): string[] {
+  return Object.keys(definicion.subCommands ?? {});
+}
+
+function sugerenciasDeSubcomando(definicion: DefinicionComando, typo: string): string[] {
+  const candidatos = subComandosDe(definicion);
+  return candidatos
+    .map((s) => ({ s, d: distancia(typo, s) }))
+    .filter((c) => c.d <= Math.max(2, Math.floor(typo.length / 3)))
+    .sort((a, b) => a.d - b.d)
+    .slice(0, 3)
+    .map((c) => c.s);
+}
+
+function normalizarRutaChat(ruta: string[], tokens: string[], raiz: DefinicionComando): { ruta: string[]; insertarEnviar: boolean } {
+  if (ruta[0] === "chat" && ruta.length === 1) {
+    return { ruta: [...ruta, "enviar"], insertarEnviar: true };
+  }
+  return { ruta, insertarEnviar: false };
+}
+
+function resolverComando(raiz: DefinicionComando, rawArgs: string[]): { nombre: string; definicion: DefinicionComando; padre?: DefinicionComando; typoSubcomando?: string; padreDelTypo?: DefinicionComando } {
   const tokens = rawArgs.filter((arg) => !arg.startsWith("-") && !arg.includes("="));
+  const tokensFiltrados: string[] = [];
+  for (const t of tokens) {
+    if (tokensFiltrados.length === 1 && tokensFiltrados[0] === "chat") {
+      tokensFiltrados.push("enviar");
+    }
+    tokensFiltrados.push(t);
+  }
   let actual = raiz;
+  let padre: DefinicionComando | undefined;
   const ruta: string[] = [];
-  for (const token of tokens) {
+  let typoSubcomando: string | undefined;
+  let padreDelTypo: DefinicionComando | undefined;
+  for (let i = 0; i < tokensFiltrados.length; i++) {
+    const token = tokensFiltrados[i]!;
     const siguiente = actual.subCommands?.[token];
-    if (!siguiente) break;
+    if (!siguiente) {
+      const tieneSubcomandos = Object.keys(actual.subCommands ?? {}).length > 0;
+      if (tieneSubcomandos) {
+        typoSubcomando = token;
+        padreDelTypo = actual;
+      }
+      break;
+    }
+    padre = actual;
     ruta.push(token);
     actual = siguiente;
   }
-  if (ruta[0] === "chat" && ruta.length === 1) {
-    const enviar = actual.subCommands?.enviar;
-    if (enviar) {
-      ruta.push("enviar");
-      actual = enviar;
-    }
-  }
-  return { nombre: ruta.join(" ") || "capi", definicion: actual };
+  return {
+    nombre: ruta.join(" ") || (typoSubcomando ? "" : "capi"),
+    definicion: actual,
+    padre: typoSubcomando ? padreDelTypo ?? raiz : padre,
+    typoSubcomando,
+    padreDelTypo,
+  };
 }
 
 function flagsDe(definicion: DefinicionComando): string[] {
@@ -51,9 +90,9 @@ function flagsDe(definicion: DefinicionComando): string[] {
   return [...flags];
 }
 
-export function validarArgumentosDesconocidos(rawArgs: string[], raiz?: DefinicionComando | object): { ok: boolean; unknowns: string[]; suggestions: string[]; command: string; available: string[] } {
+export function validarArgumentosDesconocidos(rawArgs: string[], raiz?: DefinicionComando | object): { ok: boolean; unknowns: string[]; suggestions: string[]; command: string; available: string[]; subcommandSuggestions?: string[] } {
   if (!raiz) return { ok: true, unknowns: [], suggestions: [], command: "capi", available: [] };
-  const { nombre, definicion } = resolverComando(raiz as DefinicionComando, rawArgs);
+  const { nombre, definicion, padre, typoSubcomando } = resolverComando(raiz as DefinicionComando, rawArgs);
   const available = flagsDe(definicion);
   const unknowns: string[] = [];
   for (const arg of rawArgs) {
@@ -61,18 +100,29 @@ export function validarArgumentosDesconocidos(rawArgs: string[], raiz?: Definici
     const base = arg.startsWith("--") ? arg.split("=", 1)[0]! : arg;
     if (!available.includes(base)) unknowns.push(arg);
   }
-  const suggestions = unknowns.map((unknown) => {
+  const subcommandSuggestions = typoSubcomando && padre ? sugerenciasDeSubcomando(padre, typoSubcomando) : [];
+  const suggestions = !typoSubcomando ? unknowns.map((unknown) => {
     const candidato = available
       .map((flag) => ({ flag, distancia: distancia(unknown.replace(/=.*/, ""), flag) }))
       .sort((a, b) => a.distancia - b.distancia)[0];
     return candidato && candidato.distancia <= 4 ? candidato.flag : "";
-  }).filter(Boolean);
-  return { ok: unknowns.length === 0, unknowns, suggestions: [...new Set(suggestions)], command: nombre, available };
+  }).filter(Boolean) : [];
+  return {
+    ok: unknowns.length === 0 && !typoSubcomando,
+    unknowns: typoSubcomando ? [typoSubcomando] : unknowns,
+    suggestions: [...new Set(suggestions)],
+    command: nombre === "capi" && padre && padre !== raiz ? "" : nombre,
+    available,
+    subcommandSuggestions,
+  };
 }
 
-export function mostrarErrorYHelp(comando: string, unknowns: string[], suggestions: string[] = [], available: string[] = []): void {
-  console.error(`\n\x1b[31mError: argumento(s) desconocido(s): ${unknowns.join(", ")}\x1b[0m`);
-  if (suggestions.length) console.error(`¿Quizá quisiste decir: ${suggestions.join(", ")}?`);
-  console.error(`\nUsa \x1b[36mcapi ${comando} --help\x1b[0m para ver los argumentos disponibles.`);
+export function mostrarErrorYHelp(comando: string, unknowns: string[], suggestions: string[] = [], available: string[] = [], subcommandSuggestions: string[] = []): void {
+  console.error(`\n\x1b[31mError: subcomando o argumento desconocido: ${unknowns.join(", ")}\x1b[0m`);
+  if (subcommandSuggestions.length) console.error(`¿Quizá quisiste decir: ${subcommandSuggestions.join(", ")}?`);
+  else if (suggestions.length) console.error(`¿Quizá quisiste decir: ${suggestions.join(", ")}?`);
+  const subfijo = comando ? ` ${comando}` : "";
+  const target = subfijo ? `\x1b[36mcapi${subfijo} --help\x1b[0m` : `\x1b[36mcapi --help\x1b[0m`;
+  console.error(`\nUsa ${target} para ver los argumentos disponibles.`);
   if (available.length) console.error(`Flags disponibles: ${available.join(", ")}\n`);
 }
