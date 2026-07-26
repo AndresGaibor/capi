@@ -32,6 +32,7 @@ import { comandoVisionComparar } from "./comandos/vision/comparar";
 import { comandoTareasListar } from "./comandos/tareas/listar";
 import { comandoTareasEstado } from "./comandos/tareas/estado";
 import { comandoTareasSeguir } from "./comandos/tareas/seguir";
+import { comandoTareasEsperar } from "./comandos/tareas/esperar";
 import { comandoTareasCancelar } from "./comandos/tareas/cancelar";
 import { comandoTareasReanudar } from "./comandos/tareas/reanudar";
 import { comandoTareasCompactar } from "./comandos/tareas/compactar";
@@ -108,7 +109,7 @@ export const comandoPrincipal = defineCommand({
     }),
     tareas: defineCommand({
       meta: { name: "tareas", description: "Listar, seguir y cancelar ejecuciones durables en segundo plano" },
-      subCommands: { listar: comandoTareasListar, estado: comandoTareasEstado, seguir: comandoTareasSeguir, cancelar: comandoTareasCancelar, reanudar: comandoTareasReanudar, compactar: comandoTareasCompactar, limpiar: comandoTareasLimpiar, metricas: comandoTareasMetricas, logs: comandoTareasLogs },
+      subCommands: { listar: comandoTareasListar, estado: comandoTareasEstado, seguir: comandoTareasSeguir, esperar: comandoTareasEsperar, cancelar: comandoTareasCancelar, reanudar: comandoTareasReanudar, compactar: comandoTareasCompactar, limpiar: comandoTareasLimpiar, metricas: comandoTareasMetricas, logs: comandoTareasLogs },
     }),
   },
 });

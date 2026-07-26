@@ -14,6 +14,7 @@ import { SupervisorEjecucionChat } from "./SupervisorEjecucionChat";
 import { esErrorEjecucionCancelada } from "./ErrorEjecucionCancelada";
 import { identidadProceso } from "../../../plataforma/procesos/IdentidadProceso";
 import { createHash } from "node:crypto";
+import { CAPI_CONFIG } from "../../../configuracion/ConstantesCapi";
 
 export class EnviarMensajeConContexto {
   private readonly control: ControlEjecucionChat;
@@ -151,6 +152,7 @@ export class EnviarMensajeConContexto {
         preparado.imagenesNativas > 0,
       );
       const intentosChat = new EjecutarIntentosChat();
+      const intervaloHeartbeat = setInterval(() => supervisor.heartbeat({ respuestaCaracteres: respuesta.length, pensamientoCaracteres: pensamiento.length }), CAPI_CONFIG.TIMEOUTS_MS.HEARTBEAT_EJECUCION_MS);
       try {
         for await (const evento of intentosChat.ejecutar(proveedor, peticionPreparada, intentos, idFinal, candidatas.length)) {
           this.control.verificarLease();
@@ -177,6 +179,8 @@ export class EnviarMensajeConContexto {
         intentosChat.respuesta = recuperacion.respuesta;
         intentosChat.modelo = recuperacion.modelo;
         intentosChat.conversacionId = recuperacion.conversacionId;
+      } finally {
+        clearInterval(intervaloHeartbeat);
       }
       respuesta = intentosChat.respuesta;
       modeloFinal = intentosChat.modelo;

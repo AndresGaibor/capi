@@ -9,6 +9,7 @@ import { interpretarFuentesContexto } from "../../../../modulos/contexto/aplicac
 import { separarAdjuntosContexto } from "../../../../modulos/contexto/aplicacion/SepararAdjuntosContexto";
 import { spawn } from "node:child_process";
 import { identidadProceso } from "../../../../plataforma/procesos/IdentidadProceso";
+import { CAPI_CONFIG } from "../../../../configuracion/ConstantesCapi";
 
 function normalizarConversacionId(valor: string): string {
   try {
@@ -134,7 +135,7 @@ export async function ejecutarChat(args: Record<string, unknown>): Promise<void>
       archivos: continuar ? undefined : interpretarFuentesContexto(args.archivo ? String(args.archivo) : undefined),
       imagenes,
       contexto: { incluirDiff: Boolean(args.diff), maxBytes: args.limiteContexto ? Number(args.limiteContexto) : undefined, empaquetar: args.empaquetar !== false, automatico: Boolean(args.contextoAuto), incremental: Boolean(args.incremental), incluirResumen: Boolean(args.resumen) },
-      forzarNueva: Boolean(args.nueva), permitirFallback: Boolean(args.fallback), timeoutMs: args.timeout ? Number(args.timeout) : undefined,
+      forzarNueva: Boolean(args.nueva), permitirFallback: Boolean(args.fallback), timeoutMs: args.timeout ? Number(args.timeout) : CAPI_CONFIG.TIMEOUTS_MS.CHAT_POR_DEFECTO_MS,
       opciones: { razonamiento: args.razonamiento === undefined ? preferencias?.razonamiento : Boolean(args.razonamiento), busquedaWeb: args.busqueda === undefined ? preferencias?.busquedaWeb : Boolean(args.busqueda) },
       soloPoll: continuar,
     });

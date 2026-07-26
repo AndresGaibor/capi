@@ -29,6 +29,36 @@ import { GestionarEstadoProyecto } from "../../../modulos/mantenimiento/aplicaci
 import { ChatGPTPaginaChat } from "../../../proveedores/chatgpt/navegador/ChatGPTPaginaChat";
 import { ProveedorChatGPT } from "../../../proveedores/chatgpt/ProveedorChatGPT";
 
+const cierresPendientes: Array<() => void> = [];
+let signalHandlersRegistrados = false;
+
+export function registrarCleanup(fn: () => void): void {
+  cierresPendientes.push(fn);
+}
+
+function limpiarRecursosPendientes(): void {
+  while (cierresPendientes.length) {
+    const cierre = cierresPendientes.shift();
+    try { cierre?.(); } catch {}
+  }
+}
+
+export function registrarSignalHandlers(): void {
+  if (signalHandlersRegistrados) return;
+  signalHandlersRegistrados = true;
+  const manejador = (senaal: NodeJS.Signals, codigo: number, mensaje: string) => () => {
+    if (cierresPendientes.length === 0) {
+      process.exit(codigo);
+    }
+    process.stderr.write(`\n${mensaje}\n`);
+    try { limpiarRecursosPendientes(); } catch {}
+    process.exit(codigo);
+  };
+  process.on("SIGINT", manejador("SIGINT", 130, "Señal SIGINT recibida; limpiando recursos y saliendo."));
+  process.on("SIGTERM", manejador("SIGTERM", 143, "Señal SIGTERM recibida; limpiando recursos y saliendo."));
+  process.on("SIGHUP", manejador("SIGHUP", 129, "Señal SIGHUP recibida; limpiando recursos y saliendo."));
+}
+
 export function crearAplicacion() {
   const transporte = new TransporteWebBridge();
   const proveedores = new RegistroProveedores();
@@ -41,6 +71,10 @@ export function crearAplicacion() {
   const repositorioContexto = new RepositorioContextoSqlite(join(rutaDatos, "contexto.sqlite"));
   const gestorContexto = new GestorContextoProyecto(repositorioContexto, () => detectarProyectoActual());
   const empaquetadorContexto = new EmpaquetadorContexto(join(rutaDatos, "contexto-cache"));
+  registrarSignalHandlers();
+  registrarCleanup(() => {
+    try { repositorioContexto.cerrar(); } catch {}
+  });
   return {
     proveedores,
     gestorPestanas,
