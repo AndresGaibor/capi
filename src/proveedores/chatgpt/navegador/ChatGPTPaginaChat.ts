@@ -9,6 +9,7 @@ import { scriptEstadoStreamingChatGPT } from "../scripts/estadoStreaming";
 import { scriptListarConversacionesChatGPT } from "../scripts/listarConversaciones";
 import { SELECTORES_CHATGPT } from "../selectores/SelectoresChatGPT";
 import { ErrorPaginaProveedor } from "../../../nucleo/errores/ErroresAplicacion";
+import { esperarHasta, type ProgresoEspera } from "./espera";
 import { detectarTipoArchivo } from "../../../nucleo/archivos/DetectarTipoArchivo";
 import { basename, resolve } from "node:path";
 import { readFile } from "node:fs/promises";
@@ -161,19 +162,27 @@ export class ChatGPTPaginaChat {
     }
   }
 
-  private async confirmarEnvio(): Promise<void> {
-    const timeoutMs = 10000;
-    const inicio = Date.now();
-    while (Date.now() - inicio < timeoutMs) {
-      const estado = await this.transporte.evaluar<{ turns: number; response: string; error?: string }>(scriptEstadoStreamingChatGPT());
-      if (estado.value?.error) throw new ErrorPaginaProveedor(`ChatGPT rechazo el envio: ${estado.value.error}`);
-      if ((estado.value?.turns ?? 0) > this.asistentesAntes) return;
-      if (estado.value?.response !== this.respuestaAntes && estado.value?.response !== "") return;
-      const detenido = await this.transporte.evaluar<boolean>(`Boolean(document.querySelector(${JSON.stringify(SELECTORES_CHATGPT.detener)}))`);
-      if (detenido.value) return;
-      await dormir(200);
-    }
-    throw new Error("No se pudo confirmar el envío del prompt en ChatGPT");
+  private async confirmarEnvio(alProgresar?: (progreso: ProgresoEspera) => void): Promise<void> {
+    await esperarHasta<{ confirmado: boolean; error?: string }>({
+      operacion: "confirmar envio a ChatGPT",
+      timeoutMs: 15000,
+      intervaloMs: 200,
+      intervaloFeedbackMs: 3000,
+      alProgresar,
+      verificar: async () => {
+        const estado = await this.transporte.evaluar<{ turns: number; response: string; error?: string }>(scriptEstadoStreamingChatGPT());
+        if (estado.value?.error) return { confirmado: false, error: estado.value.error };
+        if ((estado.value?.turns ?? 0) > this.asistentesAntes) return { confirmado: true };
+        if (estado.value?.response !== this.respuestaAntes && estado.value?.response !== "") return { confirmado: true };
+        const detenido = await this.transporte.evaluar<boolean>(`Boolean(document.querySelector(${JSON.stringify(SELECTORES_CHATGPT.detener)}))`);
+        if (detenido.value) return { confirmado: true };
+        return { confirmado: false };
+      },
+      completado: (estado) => {
+        if (estado.error) throw new ErrorPaginaProveedor(`ChatGPT rechazo el envio: ${estado.error}`);
+        return estado.confirmado;
+      },
+    });
   }
 
   async adjuntar(archivos: string[]): Promise<void> {
@@ -246,8 +255,20 @@ export class ChatGPTPaginaChat {
     let ultimoCambio = Date.now();
     let fallosConsecutivos = 0;
     const MAX_FALLOS_EVALUAR = 3;
+    const TIMEOUT_MAXIMO_MS = 5 * 60_000;
+    const TIMEOUT_INACTIVIDAD_MS = 45_000;
+    const inicio = Date.now();
     const supervisor = new SupervisorStreamingProveedor(configuracionProveedor("chatgpt"), Date.now());
     for (;;) {
+      const ahora = Date.now();
+      if (ahora - inicio >= TIMEOUT_MAXIMO_MS) {
+        yield { tipo: "error", mensaje: `ChatGPT timeout maximo de ${TIMEOUT_MAXIMO_MS / 1000}s alcanzado`, recuperable: true };
+        return;
+      }
+      if (ahora - ultimoCambio >= TIMEOUT_INACTIVIDAD_MS && ultimoCambio !== inicio) {
+        yield { tipo: "error", mensaje: `ChatGPT sin actividad por ${TIMEOUT_INACTIVIDAD_MS / 1000}s`, recuperable: true };
+        return;
+      }
       await dormir(CAPI_CONFIG.TIMEOUTS_MS.INTERVALO_STREAMING);
       let estado: { response: string; images?: Array<{ url: string; alt?: string }>; turns: number; isGenerating: boolean; done: boolean; error?: string; continueGenerating?: boolean } | undefined;
       try {
