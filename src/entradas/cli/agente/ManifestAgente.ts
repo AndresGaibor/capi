@@ -202,6 +202,18 @@ const comandos: EsquemaComandoAgente[] = [
     behavior: { nonInteractive: true, streaming: false, idempotent: true, sideEffects: [] }, errors: [],
   },
   {
+    name: "tasks.follow", description: "Seguir el diario durable de una ejecucion en tiempo real (JSONL por evento). Usa --follow para mantener abierto hasta que termine.",
+    examples: ['capi tareas seguir <id> --output jsonl', 'capi tareas seguir <id> --follow --output jsonl'],
+    inputSchema: { type: "object", additionalProperties: false, required: ["id"], properties: { id: { type: "positional", required: true }, desde: { type: "string", default: "0" }, follow: { type: "boolean", default: false, description: "Mantener abierto hasta que la tarea termine" } } },
+    behavior: { nonInteractive: true, streaming: true, idempotent: true, sideEffects: [] }, errors: [],
+  },
+  {
+    name: "tasks.clean", description: "Eliminar ejecuciones terminales antiguas. Sin --confirmar muestra preview de lo que se eliminaria.",
+    examples: ['capi tareas limpiar --anteriores-a 30d', 'capi tareas limpiar --anteriores-a 7d --confirmar'],
+    inputSchema: { type: "object", additionalProperties: false, required: [], properties: { anterioresA: { type: "string", default: "30d" }, confirmar: { type: "boolean", default: false } } },
+    behavior: { nonInteractive: true, streaming: false, idempotent: false, sideEffects: ["Elimina registros de ejecuciones terminales antiguas"] }, errors: [],
+  },
+  {
     name: "models.list", description: "Listar modelos disponibles por proveedor.",
     examples: ['capi modelos listar --proveedor qwen'],
     inputSchema: { type: "object", additionalProperties: false, required: [], properties: { proveedor: { type: "string", alias: "p", default: "deepseek" } } },
@@ -222,7 +234,7 @@ const TABLA_ERRORES: Array<{ code: string; nombre: string; retryable: boolean; r
   { code: "ENVIO_INCIERTO", nombre: "El envio anterior no fue confirmado", retryable: false, recovery: "Usa --continuar para observar sin reenviar." },
   { code: "ARGUMENTOS_INVALIDOS", nombre: "Combinacion de flags no permitida", retryable: false, recovery: "Sigue las sugerencias del sobre." },
   { code: "WEBBRIDGE", nombre: "Error general de WebBridge", retryable: true, recovery: "Ejecuta 'capi doctor' y sigue data.sugerencias." },
-  { code: "WEBBRIDGE_TOOL_ERROR", nombre: "Herramienta de WebBridge rechazo la operacion", retryable: true, recovery: "Revisa el codigo de error en error.codigoExtension." },
+  { code: "WEBBRIDGE_TOOL_ERROR", nombre: "Herramienta de WebBridge rechazo la operacion", retryable: true, recovery: "Ejecuta 'capi doctor' para regenerar la sesion; revisa el codigo en error.codigoExtension." },
   { code: "OPERACION_NO_PERMITIDA", nombre: "Operacion no soportada en el estado actual", retryable: false, recovery: "Espera a que termine o cancela con 'capi tareas cancelar <id>'." },
   { code: "EJECUCION_NO_ENCONTRADA", nombre: "Tarea durable no existe", retryable: false, recovery: "Lista con 'capi tareas listar'." },
   { code: "TIMEOUT_ESPERA", nombre: "capi tareas esperar alcanzo su timeout", retryable: true, recovery: "Vuelve a invocar con --timeout mas alto o usa 'capi tareas estado'." },
