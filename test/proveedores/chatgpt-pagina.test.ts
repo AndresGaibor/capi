@@ -23,8 +23,9 @@ class TransporteChatGPT {
     if (codigo === "location.href") return { value: "https://chatgpt.com/c/chat-1" as T };
     if (codigo.includes(".ProseMirror") && codigo.includes("Boolean(document.querySelector")) return { value: true as T };
     if (codigo.includes("const enlaces")) return { value: [{ href: "https://chatgpt.com/c/a?x=1", titulo: " A " }, { href: "https://chatgpt.com/c/a", titulo: "A" }] as T };
-    if (codigo.includes("isGenerating")) return { value: { turns: this.estados++, response: "respuesta", done: false, isGenerating: false } as T };
-    if (codigo.includes("attachment-chip")) return { value: true as T };
+      if (codigo.includes("isGenerating")) return { value: { turns: this.estados++, response: "respuesta", done: false, isGenerating: false } as T };
+      if (codigo.includes("const boton = document.querySelector")) return { value: true as T };
+      if (codigo.includes("attachment-chip")) return { value: true as T };
     if (codigo.includes("Boolean(document.querySelector")) return { value: false as T };
     return { value: undefined as T };
   }

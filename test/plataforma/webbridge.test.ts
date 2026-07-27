@@ -2,6 +2,14 @@ import { describe, expect, test } from "bun:test";
 import { ClienteWebBridge, WebBridgeError } from "../../src/plataforma/webbridge/ClienteWebBridge";
 describe("ClienteWebBridge",()=>{test("reporta indisponibilidad",async()=>{const c=new ClienteWebBridge("http://127.0.0.1:1");expect(await c.estaDisponible()).toBeFalse()})});
 
+test("normaliza evaluate directo y envuelto", async () => {
+  let llamada = 0;
+  const fetchFalso: any = async () => new Response(JSON.stringify({ ok: true, data: llamada++ === 0 ? true : { value: "ok" } }));
+  const c = new ClienteWebBridge("http://bridge", fetchFalso);
+  expect((await c.evaluar<boolean>("true")).value).toBeTrue();
+  expect((await c.evaluar<string>('"ok"')).value).toBe("ok");
+});
+
 test("NO recrea la sesión al fallar 'tab was closed' y propaga el error", async () => {
   const acciones: string[] = [];
   let navegaciones = 0;

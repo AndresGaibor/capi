@@ -74,6 +74,18 @@ export function recogerImagenesArgumentos(args: Record<string, unknown>, argv = 
   return [...new Set(valores.flatMap(valor => interpretarFuentesContexto(valor)))];
 }
 
+export function recogerArchivosArgumentos(args: Record<string, unknown>, argv = process.argv.slice(2)): string[] {
+  const valores: string[] = [];
+  if (Array.isArray(args.archivo)) valores.push(...args.archivo.map(String));
+  else if (args.archivo) valores.push(String(args.archivo));
+  for (let i = 0; i < argv.length; i++) {
+    const actual = argv[i]!;
+    if ((actual === "--archivo" || actual === "-f") && argv[i + 1]) valores.push(argv[++i]!);
+    else if (actual.startsWith("--archivo=")) valores.push(actual.slice("--archivo=".length));
+  }
+  return [...new Set(valores.flatMap((valor) => interpretarFuentesContexto(valor)))];
+}
+
 
 export async function ejecutarChat(args: Record<string, unknown>): Promise<void> {
   const formato = String(args.output ?? "human") as FormatoSalida;
@@ -114,7 +126,7 @@ export async function ejecutarChat(args: Record<string, unknown>): Promise<void>
   }
 
   if (args.dryRun) {
-    const fuentes = continuar ? [] : interpretarFuentesContexto(args.archivo ? String(args.archivo) : undefined);
+     const fuentes = continuar ? [] : recogerArchivosArgumentos(args);
     const clasificacion = separarAdjuntosContexto([...fuentes, ...imagenes]);
     const plan = { project: proyecto, provider: proveedor, model: modelo ?? "auto", selection: args.nueva ? { motivo: "nueva" } : seleccion, fallback: Boolean(args.fallback), context: { sources: fuentes, images: imagenes, classification: { text: clasificacion.textuales, images: clasificacion.imagenes, documents: clasificacion.documentos, rejected: clasificacion.rechazados }, automatic: Boolean(args.contextoAuto), incremental: Boolean(args.incremental), includeSummary: Boolean(args.resumen), includeGitDiff: Boolean(args.diff), maxBytes: args.limiteContexto ? Number(args.limiteContexto) : undefined, bundledAsSingleTextFile: args.empaquetar !== false }, actions: continuar ? ["seleccionar conversación", "navegar proveedor", "polling respuesta"] : ["seleccionar conversación", "preparar contexto", "adquirir lease", "navegar proveedor", "enviar prompt", "registrar conversación"] };
     const sobre = crearSobreExito("chat.send.dry-run", plan, { requestId });
@@ -133,7 +145,7 @@ export async function ejecutarChat(args: Record<string, unknown>): Promise<void>
     const promptEnvio = continuar ? "continuar" : prompt;
     const eventos = app.enviarMensaje.ejecutar(proveedor, {
       conversacionId, prompt: promptEnvio, modelo,
-      archivos: continuar ? undefined : interpretarFuentesContexto(args.archivo ? String(args.archivo) : undefined),
+       archivos: continuar ? undefined : recogerArchivosArgumentos(args),
       imagenes,
       contexto: { incluirDiff: Boolean(args.diff), maxBytes: args.limiteContexto ? Number(args.limiteContexto) : undefined, empaquetar: args.empaquetar !== false, automatico: Boolean(args.contextoAuto), incremental: Boolean(args.incremental), incluirResumen: Boolean(args.resumen) },
       nuevaPestana: Boolean(args.nueva),

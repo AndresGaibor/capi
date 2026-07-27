@@ -149,10 +149,31 @@ export class ChatGPTPaginaChat {
       await this.activarPagina();
       if (this.transporte.rellenar) {
         await this.transporte.rellenar(SELECTORES_CHATGPT.editor, prompt);
-        if (this.transporte.click) {
+        const clicDom = await this.transporte.evaluar<boolean>(`(() => {
+          const boton = document.querySelector(${JSON.stringify(SELECTORES_CHATGPT.enviar)});
+          if (!boton || typeof boton.click !== "function" || boton.getAttribute("aria-disabled") === "true" || boton.disabled === true) return false;
+          boton.click();
+          return true;
+        })()`);
+        const clicDomOk = clicDom.value === true || (clicDom as unknown as boolean) === true;
+        if (!clicDomOk && this.transporte.click) await this.transporte.click(SELECTORES_CHATGPT.enviar);
+        await dormir(300);
+        const editorConTexto = await this.transporte.evaluar<boolean>(`Boolean(document.querySelector(${JSON.stringify(SELECTORES_CHATGPT.editor)})?.textContent?.trim())`);
+        const editorTieneTexto = editorConTexto.value === true || (editorConTexto as unknown as boolean) === true;
+        if (editorTieneTexto && this.transporte.click) {
           await this.transporte.click(SELECTORES_CHATGPT.enviar);
-        } else {
-          await this.transporte.evaluar(`(() => { const boton = document.querySelector(${JSON.stringify(SELECTORES_CHATGPT.enviar)}); if (!(boton instanceof HTMLElement)) throw new Error("No se encontró el botón de envío de ChatGPT"); boton.click(); return true; })()`);
+          await dormir(300);
+          const sigueEscrito = await this.transporte.evaluar<boolean>(`Boolean(document.querySelector(${JSON.stringify(SELECTORES_CHATGPT.editor)})?.textContent?.trim())`);
+          const sigueEscritoReal = sigueEscrito.value === true || (sigueEscrito as unknown as boolean) === true;
+          if (sigueEscritoReal) {
+            await this.transporte.evaluar(`(() => {
+              const editor = document.querySelector(${JSON.stringify(SELECTORES_CHATGPT.editor)});
+              if (!(editor instanceof HTMLElement)) return false;
+              editor.focus();
+              editor.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", code: "Enter", bubbles: true, cancelable: true }));
+              return true;
+            })()`);
+          }
         }
       } else {
         await this.transporte.evaluar(scriptEnviarPromptChatGPT(prompt));
@@ -196,6 +217,7 @@ export class ChatGPTPaginaChat {
   async adjuntar(archivos: string[]): Promise<void> {
     if (!archivos.length) return;
     if (!this.transporte.cdp) throw new Error("WebBridge no admite CDP para adjuntar archivos en ChatGPT");
+    await this.cerrarModalArchivoDuplicado();
     const grupos = new Map<string, string[]>();
     for (const archivo of archivos) {
       const selector = detectarTipoArchivo(archivo).mime.startsWith("image/")
@@ -216,6 +238,8 @@ export class ChatGPTPaginaChat {
         await this.adjuntarPorDom(rutas, selector);
       }
     }
+    await dormir(CAPI_CONFIG.TIMEOUTS_MS.ASENTAMIENTO_ADJUNTO);
+    await this.cerrarModalArchivoDuplicado();
   }
 
   private async adjuntarPorDom(rutas: string[], selector: string): Promise<void> {
@@ -225,9 +249,11 @@ export class ChatGPTPaginaChat {
       if (buffer.length > MAX_TAMANIO_ARCHIVO) throw new Error(`Archivo demasiado grande: ${basename(ruta)} (max ${MAX_TAMANIO_ARCHIVO / 1024 / 1024}MB)`);
       archivosData.push({ base64: buffer.toString("base64"), nombre: basename(ruta), mime: detectarTipoArchivo(ruta).mime });
     }
-    await this.esperarInputArchivos(selector, 10000);
-    for (const arch of archivosData) {
-      const clave = `__capiChatGPTArchivo_${crypto.randomUUID().replaceAll("-", "")}`;
+      await this.esperarInputArchivos(selector, 10000);
+      for (const arch of archivosData) {
+        const yaExiste = await this.transporte.evaluar<boolean>(`Array.from(document.querySelectorAll('button[aria-label^="Quitar archivo"]')).some((boton) => (boton.getAttribute("aria-label") || "").includes(${JSON.stringify(arch.nombre)}))`);
+        if (yaExiste.value === true || (yaExiste as unknown as boolean) === true) continue;
+        const clave = `__capiChatGPTArchivo_${crypto.randomUUID().replaceAll("-", "")}`;
       await this.transporte.evaluar(`window[${JSON.stringify(clave)}]=[]`);
       for (let inicio = 0; inicio < arch.base64.length; inicio += 256 * 1024) {
         await this.transporte.evaluar(`window[${JSON.stringify(clave)}].push(${JSON.stringify(arch.base64.slice(inicio, inicio + 256 * 1024))})`);
@@ -249,10 +275,11 @@ export class ChatGPTPaginaChat {
         }
         return { ok: true, count: input.files.length };
       })()`);
-      if (!adjunto.value?.ok) {
-        throw new ErrorPaginaProveedor(adjunto.value?.error ?? `ChatGPT no acepto ${arch.nombre}`);
+        if (!adjunto.value?.ok) {
+          throw new ErrorPaginaProveedor(adjunto.value?.error ?? `ChatGPT no acepto ${arch.nombre}`);
+        }
+        await this.cerrarModalArchivoDuplicado();
       }
-    }
     const estado = await this.transporte.evaluar<{ ok: boolean; error?: string; count?: number }>(`(() => {
       const input = document.querySelector(${JSON.stringify(selector)});
       if (!(input instanceof HTMLInputElement)) return { ok: false, error: "No se encontró el input de ChatGPT" };
@@ -260,6 +287,19 @@ export class ChatGPTPaginaChat {
       return { ok: true, count: input.files.length };
     })()`);
     if (!estado.value?.ok) throw new Error(estado.value?.error ?? `ChatGPT rechazó los archivos`);
+  }
+
+  private async cerrarModalArchivoDuplicado(): Promise<void> {
+    await this.transporte.evaluar(`(() => {
+      const modal = document.querySelector('[data-testid="modal-duplicate-file"]');
+      if (!modal) return false;
+      const boton = modal.querySelector('button');
+      if (boton && typeof boton.click === "function") boton.click();
+      const quitar = document.querySelectorAll('button[aria-label^="Quitar archivo"]');
+      const ultimo = quitar[quitar.length - 1];
+      if (ultimo && typeof ultimo.click === "function") ultimo.click();
+      return true;
+    })()`);
   }
 
   async *observar(conversacionConocida?: string): AsyncGenerator<EventoStreaming> {

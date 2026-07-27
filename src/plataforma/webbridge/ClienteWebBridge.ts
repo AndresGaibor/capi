@@ -98,7 +98,11 @@ export class ClienteWebBridge {
   async click(selector: string): Promise<void> {
     await this.comando("click", { selector });
   }
-  evaluar<T>(codigo: string) { return this.comando<{ value: T }>("evaluate", { code: codigo }); }
+  async evaluar<T>(codigo: string): Promise<{ value: T }> {
+    const resultado = await this.comando<unknown>("evaluate", { code: codigo });
+    if (resultado && typeof resultado === "object" && "value" in resultado) return resultado as { value: T };
+    return { value: resultado as T };
+  }
   snapshotAccesibilidad() { return this.comando<{ url: string; title: string; tree: unknown }>("snapshot"); }
   cdp<T>(method: string, params: Record<string, unknown> = {}) { return this.comando<T>("cdp", { method, params }); }
   cerrarSesion() { return this.comando<void>("close_session"); }
