@@ -25,3 +25,18 @@ test("EjecutarStreamingChat cancela el timer cuando el stream termina antes del 
   for await (const _ of new EjecutarStreamingChat().ejecutar(proveedor, { prompt: "x", timeoutMs: 1000 } as any, undefined)) {}
   expect(Date.now() - inicio).toBeLessThan(500);
 });
+
+test("preserva el error original si cerrar el iterador también falla", async () => {
+  let retornos = 0;
+  const proveedor: any = {
+    enviarMensaje() {
+      return {
+        next: async () => { throw new Error("AbortError cancelado"); },
+        return: async () => { retornos++; throw new Error("session closed"); },
+        [Symbol.asyncIterator]() { return this; },
+      };
+    },
+  };
+  await expect((async () => { for await (const _ of new EjecutarStreamingChat().ejecutar(proveedor, { prompt: "x" } as any, undefined)) {} })()).rejects.toThrow("AbortError cancelado");
+  expect(retornos).toBe(1);
+});

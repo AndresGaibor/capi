@@ -24,6 +24,10 @@ function promesaConTimeout<T>(operacion: Promise<T>, timeoutMs: number): Promise
   });
 }
 
+async function cerrarIteradorSeguro<T>(iterador: AsyncIterator<T>): Promise<void> {
+  try { await iterador.return?.(undefined as never); } catch {}
+}
+
 export class EjecutarStreamingChat {
   respuesta = "";
   modelo?: string;
@@ -53,7 +57,7 @@ export class EjecutarStreamingChat {
         try {
           siguiente = restante == null ? await iterador.next() : await siguienteConTimeout(iterador, restante, peticion.timeoutMs);
         } catch (error) {
-          await iterador.return?.(undefined as never);
+          await cerrarIteradorSeguro(iterador);
           iteradorCerrado = true;
           throw error;
         }
@@ -73,7 +77,7 @@ export class EjecutarStreamingChat {
       }
     } finally {
       if (!iteradorCerrado) {
-        await iterador.return?.(undefined as never);
+        await cerrarIteradorSeguro(iterador);
         iteradorCerrado = true;
       }
     }
