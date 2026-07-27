@@ -45,9 +45,13 @@ export class ChatGPTPaginaChat {
 
 
   private async esperarEditorChatGPT(timeoutMs = 15000): Promise<void> {
-    const selector = this.transporte.cdp
-      ? '.ProseMirror[contenteditable="true"]'
-      : 'textarea[aria-label*="ChatGPT" i], textarea[aria-label*="Chatear" i], textarea[name="prompt-textarea"]';
+    const selector = [
+      SELECTORES_CHATGPT.editor,
+      '.ProseMirror[contenteditable="true"]',
+      'textarea[name="prompt-textarea"]',
+      'textarea[aria-label*="ChatGPT" i]',
+      'textarea[aria-label*="Chatear" i]',
+    ].join(", ");
     const inicio = Date.now();
     while (Date.now() - inicio < timeoutMs) {
       const listo = await this.transporte.evaluar<boolean>(`Boolean(document.querySelector(${JSON.stringify(selector)}))`);
@@ -156,24 +160,9 @@ export class ChatGPTPaginaChat {
           return true;
         })()`);
         const clicDomOk = clicDom.value === true || (clicDom as unknown as boolean) === true;
-        if (!clicDomOk && this.transporte.click) await this.transporte.click(SELECTORES_CHATGPT.enviar);
-        await dormir(300);
-        const editorConTexto = await this.transporte.evaluar<boolean>(`Boolean(document.querySelector(${JSON.stringify(SELECTORES_CHATGPT.editor)})?.textContent?.trim())`);
-        const editorTieneTexto = editorConTexto.value === true || (editorConTexto as unknown as boolean) === true;
-        if (editorTieneTexto && this.transporte.click) {
+        if (!clicDomOk) {
+          if (!this.transporte.click) throw new ErrorPaginaProveedor("No fue posible activar el envío de ChatGPT");
           await this.transporte.click(SELECTORES_CHATGPT.enviar);
-          await dormir(300);
-          const sigueEscrito = await this.transporte.evaluar<boolean>(`Boolean(document.querySelector(${JSON.stringify(SELECTORES_CHATGPT.editor)})?.textContent?.trim())`);
-          const sigueEscritoReal = sigueEscrito.value === true || (sigueEscrito as unknown as boolean) === true;
-          if (sigueEscritoReal) {
-            await this.transporte.evaluar(`(() => {
-              const editor = document.querySelector(${JSON.stringify(SELECTORES_CHATGPT.editor)});
-              if (!(editor instanceof HTMLElement)) return false;
-              editor.focus();
-              editor.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", code: "Enter", bubbles: true, cancelable: true }));
-              return true;
-            })()`);
-          }
         }
       } else {
         await this.transporte.evaluar(scriptEnviarPromptChatGPT(prompt));
@@ -215,12 +204,16 @@ export class ChatGPTPaginaChat {
     if (!this.transporte.cdp) throw new Error("WebBridge no admite CDP para adjuntar archivos en ChatGPT");
     await this.cerrarModalArchivoDuplicado();
     const grupos = new Map<string, string[]>();
+    const rutasVistas = new Set<string>();
     for (const archivo of archivos) {
-      const selector = detectarTipoArchivo(archivo).mime.startsWith("image/")
+      const ruta = resolve(archivo);
+      if (rutasVistas.has(ruta)) continue;
+      rutasVistas.add(ruta);
+      const selector = detectarTipoArchivo(ruta).mime.startsWith("image/")
         ? SELECTORES_CHATGPT.adjuntarImagenes
         : SELECTORES_CHATGPT.adjuntarArchivos;
       const lista = grupos.get(selector) ?? [];
-      lista.push(resolve(archivo));
+      lista.push(ruta);
       grupos.set(selector, lista);
     }
     for (const [selector, rutas] of grupos) {

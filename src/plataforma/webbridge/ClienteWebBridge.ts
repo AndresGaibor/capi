@@ -96,7 +96,30 @@ export class ClienteWebBridge {
   }
 
   async listarPestanas():Promise<Array<{url?:string;title?:string;active?:boolean}>> { const r=await this.comando<{tabs?:Array<{url?:string;title?:string;active?:boolean}>}>("list_tabs"); return r.tabs??[]; }
-  async recuperarPestana(host:string,url?:string):Promise<boolean> { try { const tabs=await this.listarPestanas(); const encontrada=tabs.find(t=>urlPerteneceAlHost(t.url,host)); if(encontrada?.url){ await this.comando("find_tab",{url:encontrada.url,active:false}); return true; } if(url){ await this.comando("navigate",{url,newTab:true,group_title:"Recuperación CAPI"}); return true; } return false; } catch { return false; } }
+  async recuperarPestana(host:string,url?:string):Promise<boolean> {
+    try {
+      const tabs = await this.listarPestanas();
+      if (url) {
+        const objetivo = new URL(url);
+        const exacta = tabs.find((tab) => {
+          try {
+            const actual = new URL(tab.url ?? "");
+            return urlPerteneceAlHost(tab.url, host) && actual.pathname === objetivo.pathname;
+          } catch { return false; }
+        });
+        if (exacta?.url) {
+          await this.comando("find_tab", { url: exacta.url, active: false });
+          return true;
+        }
+        await this.comando("navigate", { url, newTab: true, group_title: "Recuperación CAPI" });
+        return true;
+      }
+      const encontrada = tabs.find((tab) => urlPerteneceAlHost(tab.url, host));
+      if (!encontrada?.url) return false;
+      await this.comando("find_tab", { url: encontrada.url, active: false });
+      return true;
+    } catch { return false; }
+  }
   async red(cmd:"start"|"stop"|"list"|"detail",opciones:Record<string,unknown>={}):Promise<unknown> { return this.comando("network",{cmd,...opciones}); }
   async listarRedSaneada():Promise<RegistroRedSaneado[]> { const r:any=await this.red("list"); const registros=Array.isArray(r)?r:(r?.requests??r?.entries??[]); return registros.map(sanearRegistroRed); }
 

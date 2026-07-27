@@ -62,7 +62,7 @@ test("ChatGPT abre una pestaña nueva cuando se solicita --nueva aunque ya exist
   expect(navegadas).toEqual([{ url: "https://chatgpt.com/", nueva: true }]);
 });
 
-test("ChatGPT con CDP no acepta solo el textarea antes de ProseMirror", async () => {
+test("ChatGPT acepta textarea fallback aunque CDP esté disponible", async () => {
   let intentosProseMirror = 0;
   const transporte: any = {
     async navegar() {},
@@ -75,7 +75,7 @@ test("ChatGPT con CDP no acepta solo el textarea antes de ProseMirror", async ()
     },
   };
   await new ChatGPTPaginaChat(transporte).abrirConversacion();
-  expect(intentosProseMirror).toBe(3);
+  expect(intentosProseMirror).toBe(0);
 });
 
 test("ChatGPT espera ProseMirror después de abrir una conversación", async () => {

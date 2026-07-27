@@ -52,6 +52,24 @@ export const argumentosChat = {
 };
 
 const formatos = new Set(["human", "markdown", "json", "jsonl"]);
+
+export function enteroPositivo(nombre: string, valor: unknown, predeterminado: number): number {
+  if (valor == null) return predeterminado;
+  const numero = Number(valor);
+  if (!Number.isSafeInteger(numero) || numero <= 0) throw new ErrorArgumentosInvalidos(`${nombre} debe ser un entero positivo`, []);
+  return numero;
+}
+
+function emitirErrorArgumentos(error: unknown, formatoSolicitado: string, requestId: string): void {
+  const formato = formatos.has(formatoSolicitado) ? formatoSolicitado as FormatoSalida : "jsonl";
+  if (formato === "human") {
+    consola.error(error instanceof Error ? error.message : String(error));
+    return;
+  }
+  const sobre = crearSobreError("chat.send", error, { requestId });
+  process.stdout.write(serializarSalida(sobre, formato === "jsonl" ? "jsonl" : formato) + "\n");
+  process.exitCode = codigoSalidaParaError(sobre.error?.code);
+}
 export function resolverConversacionParaChat(entrada: {
   explicita?: string;
   persistida?: string;
@@ -88,20 +106,28 @@ export function recogerArchivosArgumentos(args: Record<string, unknown>, argv = 
 
 
 export async function ejecutarChat(args: Record<string, unknown>): Promise<void> {
-  const formato = String(args.output ?? "human") as FormatoSalida;
+  const formatoSolicitado = String(args.output ?? "human");
+  const formato = formatos.has(formatoSolicitado) ? formatoSolicitado as FormatoSalida : "jsonl";
   const requestId = args.requestId ? String(args.requestId) : crypto.randomUUID();
-  if (!formatos.has(formato)) throw new ErrorArgumentosInvalidos(`Formato no soportado: ${formato}. Usa human, markdown, json o jsonl.`,[{command:"capi chat enviar \"texto\" --output jsonl",reason:"formato valido para agentes"}]);
   const tareaId = process.env.CAPI_TASK_ID;
+  const continuar = Boolean(args.continuar);
+  const prompt = String(args.prompt ?? "").trim();
+  let timeoutMs: number;
+  try {
+    if (!formatos.has(formatoSolicitado)) throw new ErrorArgumentosInvalidos(`Formato no soportado: ${formatoSolicitado}. Usa human, markdown, json o jsonl.`, []);
+    if (!continuar && !prompt) throw new ErrorArgumentosInvalidos("Debes proporcionar un prompt o usa --continuar para consultar una respuesta pendiente.", []);
+    if (args.nueva && (args.conversacion || continuar)) throw new ErrorArgumentosInvalidos("--nueva no se puede combinar con --conversacion ni --continuar.", []);
+    if (continuar && (prompt || args.nueva || recogerArchivosArgumentos(args).length > 0 || args.imagen)) throw new ErrorArgumentosInvalidos("--continuar solo hace polling: no acepta prompt, archivos, imágenes ni --nueva.", []);
+    timeoutMs = enteroPositivo("--timeout", args.timeout, CAPI_CONFIG.TIMEOUTS_MS.CHAT_POR_DEFECTO_MS);
+  } catch (error) {
+    emitirErrorArgumentos(error, formatoSolicitado, requestId);
+    return;
+  }
   const app = crearAplicacion();
   const proyecto = app.gestorContexto.proyectoActual();
   const preferencias = app.repositorioContexto.obtenerPreferencias(proyecto.id);
   const proveedor = args.proveedor ? String(args.proveedor) : preferencias?.proveedor ?? "deepseek";
   const modelo = args.modelo ? String(args.modelo) : preferencias?.modelo;
-  const continuar = Boolean(args.continuar);
-  const prompt = String(args.prompt ?? "").trim();
-  if (!continuar && !prompt) throw new ErrorArgumentosInvalidos("Debes proporcionar un prompt o usa --continuar para consultar una respuesta pendiente.",[{command:'capi chat enviar "tu prompt" --output jsonl',reason:"enviar un prompt"},{command:"capi chat --continuar -p <proveedor> --output json",reason:"solo hacer polling de una respuesta existente"}]);
-  if (args.nueva && (args.conversacion || continuar)) throw new ErrorArgumentosInvalidos("--nueva no se puede combinar con --conversacion ni --continuar.",[{command:'capi chat enviar "tu prompt" --nueva',reason:"forzar nueva conversacion sin id"},{command:'capi chat enviar "tu prompt" --conversacion <id>',reason:"reanudar una conversacion existente"}]);
-  if (continuar && (prompt || args.nueva || args.archivo || args.imagen)) throw new ErrorArgumentosInvalidos("--continuar solo hace polling: no acepta prompt, archivos, imágenes ni --nueva.",[{command:"capi chat --continuar -p <proveedor> --output json",reason:"observar sin enviar nuevo prompt"}]);
   const conversacionExplicita = args.conversacion ? normalizarConversacionId(String(args.conversacion)) : undefined;
   const seleccion = app.gestorContexto.seleccionar(proveedor, conversacionExplicita).seleccion;
   const conversacionId = resolverConversacionParaChat({
@@ -149,7 +175,7 @@ export async function ejecutarChat(args: Record<string, unknown>): Promise<void>
       imagenes,
       contexto: { incluirDiff: Boolean(args.diff), maxBytes: args.limiteContexto ? Number(args.limiteContexto) : undefined, empaquetar: args.empaquetar !== false, automatico: Boolean(args.contextoAuto), incremental: Boolean(args.incremental), incluirResumen: Boolean(args.resumen) },
       nuevaPestana: Boolean(args.nueva),
-      forzarNueva: Boolean(args.nueva), permitirFallback: Boolean(args.fallback), timeoutMs: args.timeout ? Number(args.timeout) : CAPI_CONFIG.TIMEOUTS_MS.CHAT_POR_DEFECTO_MS,
+      forzarNueva: Boolean(args.nueva), permitirFallback: Boolean(args.fallback), timeoutMs,
       opciones: { razonamiento: args.razonamiento === undefined ? preferencias?.razonamiento : Boolean(args.razonamiento), busquedaWeb: args.busqueda === undefined ? preferencias?.busquedaWeb : Boolean(args.busqueda) },
       soloPoll: continuar,
     });

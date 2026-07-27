@@ -102,6 +102,21 @@ test("selecciona la pestaña activa del proveedor antes que una pestaña antigua
   expect(acciones.at(-1)?.args).toEqual({ url: "https://chatgpt.com/c/actual", active: false });
 });
 
+test("recupera la conversación exacta y no otra del mismo host", async () => {
+  const acciones: any[] = [];
+  const fetchFalso: any = async (_url: string, init: any) => {
+    const cuerpo = JSON.parse(init.body);
+    acciones.push(cuerpo);
+    if (cuerpo.action === "list_tabs") return new Response(JSON.stringify({ ok: true, data: { tabs: [
+      { url: "https://chatgpt.com/c/A", active: false },
+    ] } }));
+    return new Response(JSON.stringify({ ok: true, data: { success: true } }));
+  };
+  const c = new ClienteWebBridge("http://bridge", fetchFalso);
+  expect(await c.recuperarPestana("chatgpt.com", "https://chatgpt.com/c/B")).toBeTrue();
+  expect(acciones.at(-1)).toMatchObject({ action: "navigate", args: { url: "https://chatgpt.com/c/B", newTab: true } });
+});
+
 test("NO reintenta en WebBridgeError (error de la aplicación)", async () => {
   let intentos = 0;
   const fetchFalso: any = async () => {
