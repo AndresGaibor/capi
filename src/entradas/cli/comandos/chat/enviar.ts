@@ -113,6 +113,7 @@ export async function ejecutarChat(args: Record<string, unknown>): Promise<void>
   const continuar = Boolean(args.continuar);
   const prompt = String(args.prompt ?? "").trim();
   let timeoutMs: number;
+  let renderizadorAgente: RenderizadorAgenteStreaming | undefined;
   try {
     if (!formatos.has(formatoSolicitado)) throw new ErrorArgumentosInvalidos(`Formato no soportado: ${formatoSolicitado}. Usa human, markdown, json o jsonl.`, []);
     if (!continuar && !prompt) throw new ErrorArgumentosInvalidos("Debes proporcionar un prompt o usa --continuar para consultar una respuesta pendiente.", []);
@@ -187,6 +188,7 @@ export async function ejecutarChat(args: Record<string, unknown>): Promise<void>
       for await (const evento of eventos) { pausada ||= evento.tipo === "pausado"; renderizador.renderizar(evento); }
     } else {
       const renderizador = new RenderizadorAgenteStreaming("chat.send", formato, requestId);
+      renderizadorAgente = renderizador;
       let pausada = false;
       for await (const evento of eventos) { pausada ||= evento.tipo === "pausado"; renderizador.renderizar(evento); }
       renderizador.finalizar();
@@ -206,7 +208,8 @@ export async function ejecutarChat(args: Record<string, unknown>): Promise<void>
       const alternativa = proveedor === "qwen" ? "deepseek" : "qwen";
       const rawPrompt = String(args.prompt || "").trim();
       const sugerenciaPrompt = (rawPrompt && rawPrompt.toLowerCase() !== "send") ? rawPrompt : "tu mensaje";
-      const sobre = crearSobreError("chat.send", error, { requestId, suggestions: [{ command: `capi chat -p ${alternativa} --output jsonl ${JSON.stringify(sugerenciaPrompt)}`, reason: "usar el proveedor alternativo" }] });
+      const parcial = renderizadorAgente?.resultado();
+      const sobre = crearSobreError("chat.send", error, { requestId, details: parcial?.response ? { partial: true, result: parcial } : undefined, suggestions: [{ command: `capi chat -p ${alternativa} --output jsonl ${JSON.stringify(sugerenciaPrompt)}`, reason: "usar el proveedor alternativo" }] });
       process.stdout.write(serializarSalida(sobre, formato === "jsonl" ? "jsonl" : formato) + "\n");
       process.exitCode = codigoSalidaParaError(sobre.error?.code);
     }

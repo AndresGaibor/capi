@@ -297,16 +297,11 @@ export class ChatGPTPaginaChat {
     let ultimoCambio = Date.now();
     let fallosConsecutivos = 0;
     const MAX_FALLOS_EVALUAR = 3;
-    const TIMEOUT_MAXIMO_MS = 10 * 60_000;
     const TIMEOUT_INACTIVIDAD_MS = 120_000;
     const inicio = Date.now();
     const supervisor = new SupervisorStreamingProveedor(configuracionProveedor("chatgpt"), Date.now());
     for (;;) {
       const ahora = Date.now();
-      if (ahora - inicio >= TIMEOUT_MAXIMO_MS) {
-        yield { tipo: "error", mensaje: `ChatGPT timeout maximo de ${TIMEOUT_MAXIMO_MS / 1000}s alcanzado`, recuperable: true };
-        return;
-      }
       if (ahora - ultimoCambio >= TIMEOUT_INACTIVIDAD_MS && ultimoCambio !== inicio) {
         yield { tipo: "error", mensaje: `ChatGPT sin actividad por ${TIMEOUT_INACTIVIDAD_MS / 1000}s`, recuperable: true };
         return;
