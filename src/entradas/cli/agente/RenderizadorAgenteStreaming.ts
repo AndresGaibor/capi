@@ -1,5 +1,6 @@
 import type { EventoStreaming } from "../../../nucleo/chat/EventoStreaming";
 import { codigoSalidaParaError, crearSobreError, crearSobreExito, serializarSalida, type FormatoSalida } from "./FormatoSalida";
+import { AcumuladorRespuestaArchivo, type ArtefactoAgente } from "./AcumuladorRespuestaArchivo";
 
 const EVENTOS: Record<EventoStreaming["tipo"], string> = {
   inicio: "progress",
@@ -28,21 +29,23 @@ export class RenderizadorAgenteStreaming {
   private error?: string;
   private terminalEmitido = false;
   private codigoSalidaActual = 0;
+  private readonly acumulador: AcumuladorRespuestaArchivo;
+  private artifact?: ArtefactoAgente;
+  private readonly startedAt = Date.now();
 
   constructor(
     private readonly command: string,
     private readonly format: FormatoSalida,
     private readonly requestId: string = crypto.randomUUID(),
     private readonly write: (line: string) => void = (line) => process.stdout.write(`${line}\n`),
-  ) {}
+  ) { this.acumulador = new AcumuladorRespuestaArchivo(this.requestId); }
 
   renderizar(evento: EventoStreaming): void {
     if (evento.tipo === "inicio" && evento.mensaje) this.progress.push(evento.mensaje);
     if (evento.tipo === "pensamiento") this.reasoning += evento.contenido;
     if (evento.tipo === "respuesta") {
-      this.response = evento.reemplazo
-        ? evento.contenido
-        : this.response + evento.contenido;
+      this.acumulador.escribir(evento.contenido, Boolean(evento.reemplazo));
+      this.response = this.acumulador.vistaPrevia();
     }
     if (evento.tipo === "imagen") this.response += `\n[Imagen: ${evento.url}]`;
     if (evento.tipo === "modelo") this.model = evento.nombre;
@@ -52,12 +55,16 @@ export class RenderizadorAgenteStreaming {
     if (evento.tipo === "pausado") this.paused = true;
     if (evento.tipo === "error") {
       this.error = evento.mensaje;
+      this.cerrarArtefacto(true);
       this.terminalEmitido = true;
-      const sobre = crearSobreError(this.command, new Error(evento.mensaje), { requestId: this.requestId });
+      const sobre = crearSobreError(this.command, new Error(evento.mensaje), { requestId: this.requestId, details: this.artifact ? { artifact: this.artifact, partialResult: this.resultado() } : undefined });
       this.codigoSalidaActual = codigoSalidaParaError(sobre.error?.code);
       if (this.format !== "jsonl") this.write(serializarSalida(sobre, this.format));
     }
-    if (evento.tipo === "fin" || evento.tipo === "pausado") this.terminalEmitido = true;
+    if (evento.tipo === "fin" || evento.tipo === "pausado") {
+      this.cerrarArtefacto(false);
+      this.terminalEmitido = true;
+    }
 
     if (this.format === "jsonl") {
       this.write(JSON.stringify({ protocol: "capi.agent.v1", requestId: this.requestId, command: this.command, event: EVENTOS[evento.tipo], data: this.dataEvento(evento) }));
@@ -70,7 +77,8 @@ export class RenderizadorAgenteStreaming {
 
   finalizar(): void {
     if (this.terminalEmitido) return;
-    const sobre = crearSobreError(this.command, new Error("El stream terminó sin evento terminal"), { requestId: this.requestId });
+    this.cerrarArtefacto(true);
+    const sobre = crearSobreError(this.command, new Error("El stream terminó sin evento terminal"), { requestId: this.requestId, details: this.artifact ? { artifact: this.artifact, partialResult: this.resultado() } : undefined });
     this.codigoSalidaActual = codigoSalidaParaError(sobre.error?.code);
     if (this.format === "jsonl") {
       this.write(JSON.stringify({ protocol: "capi.agent.v1", requestId: this.requestId, command: this.command, event: "stream.error", data: sobre.error }));
@@ -89,6 +97,8 @@ export class RenderizadorAgenteStreaming {
       conversationId: this.conversationId,
       executionId: this.executionId,
       context: this.context,
+      artifact: this.artifact,
+      timing: { startedAt: new Date(this.startedAt).toISOString(), completedAt: new Date().toISOString(), elapsedMs: Date.now() - this.startedAt },
       progress: this.progress,
       paused: this.paused || undefined,
       error: this.error,
@@ -108,5 +118,9 @@ export class RenderizadorAgenteStreaming {
     if (evento.tipo === "pausado") return { motivo: evento.motivo, conversacionId: evento.conversacionId };
     if (evento.tipo === "error") return { mensaje: evento.mensaje, recuperable: evento.recuperable };
     return this.resultado();
+  }
+
+  private cerrarArtefacto(partial: boolean): void {
+    if (!this.artifact) this.artifact = this.acumulador.finalizar(partial);
   }
 }

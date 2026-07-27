@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { readFileSync, unlinkSync } from "node:fs";
 import { RenderizadorAgenteStreaming } from "../../src/entradas/cli/agente/RenderizadorAgenteStreaming";
 
 test("jsonl emite un evento estable por línea", () => {
@@ -38,4 +39,17 @@ test("finalizar detecta stream incompleto", () => {
   r.renderizar({ tipo: "respuesta", contenido: "parcial" });
   r.finalizar();
   expect(JSON.parse(lineas[0]!).ok).toBeFalse();
+});
+
+test("guarda respuestas largas como artefacto con hash", () => {
+  const lineas: string[] = [];
+  const r = new RenderizadorAgenteStreaming("chat.send", "json", "req-larga", (s) => lineas.push(s));
+  const contenido = "x".repeat(70_000);
+  r.renderizar({ tipo: "respuesta", contenido });
+  r.renderizar({ tipo: "fin" });
+  const resultado = JSON.parse(lineas[0]!).data;
+  expect(resultado.artifact.bytes).toBe(70_000);
+  expect(resultado.artifact.hash).toStartWith("sha256:");
+  expect(readFileSync(resultado.artifact.path, "utf8")).toBe(contenido);
+  unlinkSync(resultado.artifact.path);
 });

@@ -106,8 +106,9 @@ export function serializarSalida(sobre: SobreAgente, formato: FormatoSalida): st
   if (formato === "json" || formato === "jsonl") return JSON.stringify(sobre);
   if (formato === "markdown") {
     const cuerpo = sobre.ok ? markdownValor(sobre.data) : `**${sobre.error?.code}:** ${sobre.error?.message}`;
+    const detalles = !sobre.ok && sobre.error?.details !== undefined ? `\n\n## Detalles\n${markdownValor(sobre.error.details)}` : "";
     const sugerencias = sobre.suggestions.length ? `\n\n## Siguientes acciones\n${sobre.suggestions.map((s) => `- \`${s.command}\` — ${s.reason}`).join("\n")}` : "";
-    return `# CAPI: ${sobre.command}\n\n- **Estado:** ${sobre.ok ? "éxito" : "error"}\n- **Request ID:** \`${sobre.requestId}\`\n\n${cuerpo}${sugerencias}`;
+    return `# CAPI: ${sobre.command}\n\n- **Estado:** ${sobre.ok ? "éxito" : "error"}\n- **Request ID:** \`${sobre.requestId}\`\n\n${cuerpo}${detalles}${sugerencias}`;
   }
   return sobre.ok ? String(typeof sobre.data === "string" ? sobre.data : JSON.stringify(sobre.data, null, 2)) : `${sobre.error?.code}: ${sobre.error?.message}`;
 }
