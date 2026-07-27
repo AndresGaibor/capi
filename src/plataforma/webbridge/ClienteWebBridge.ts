@@ -1,6 +1,7 @@
 import { CAPI_CONFIG } from "../../configuracion/ConstantesCapi";
 
 const dormir = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+const ACCIONES_REINTENTABLES = new Set(["list_tabs", "find_tab", "snapshot"]);
 
 function esErrorTransitorio(error: unknown): boolean {
   if (error instanceof TypeError) return true;
@@ -71,7 +72,7 @@ export class ClienteWebBridge {
         return j.data;
       } catch (error) {
         ultimoError = error;
-        if (error instanceof WebBridgeError || intento >= MAX_INTENTOS || !esErrorTransitorio(error)) throw error;
+        if (error instanceof WebBridgeError || intento >= MAX_INTENTOS || !ACCIONES_REINTENTABLES.has(action) || !esErrorTransitorio(error)) throw error;
         await dormir(RETRASO_BASE_MS * 2 ** (intento - 1));
       }
     }

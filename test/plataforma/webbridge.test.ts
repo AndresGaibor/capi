@@ -10,6 +10,14 @@ test("normaliza evaluate directo y envuelto", async () => {
   expect((await c.evaluar<string>('"ok"')).value).toBe("ok");
 });
 
+test("no reintenta acciones mutantes tras un fallo de red", async () => {
+  let llamadas = 0;
+  const fetchFalso: any = async () => { llamadas++; throw new TypeError("fetch failed after commit"); };
+  const c = new ClienteWebBridge("http://bridge", fetchFalso);
+  await expect(c.click("[data-testid=send-button]")).rejects.toThrow("fetch failed");
+  expect(llamadas).toBe(1);
+});
+
 test("NO recrea la sesión al fallar 'tab was closed' y propaga el error", async () => {
   const acciones: string[] = [];
   let navegaciones = 0;
