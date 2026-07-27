@@ -75,7 +75,8 @@ export class RenderizadorAgenteStreaming {
 
   private dataEvento(evento: EventoStreaming): Record<string, unknown> {
     if (evento.tipo === "inicio") return { message: evento.mensaje };
-    if (evento.tipo === "pensamiento" || evento.tipo === "respuesta") return { content: evento.contenido };
+    if (evento.tipo === "pensamiento") return { content: evento.contenido };
+    if (evento.tipo === "respuesta") return { content: evento.contenido, replacement: Boolean(evento.reemplazo) };
     if (evento.tipo === "imagen") return { url: evento.url, alt: evento.alt };
     if (evento.tipo === "modelo") return { model: evento.nombre };
     if (evento.tipo === "conversacion") return { conversationId: evento.id };
