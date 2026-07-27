@@ -136,6 +136,7 @@ export async function ejecutarChat(args: Record<string, unknown>): Promise<void>
       archivos: continuar ? undefined : interpretarFuentesContexto(args.archivo ? String(args.archivo) : undefined),
       imagenes,
       contexto: { incluirDiff: Boolean(args.diff), maxBytes: args.limiteContexto ? Number(args.limiteContexto) : undefined, empaquetar: args.empaquetar !== false, automatico: Boolean(args.contextoAuto), incremental: Boolean(args.incremental), incluirResumen: Boolean(args.resumen) },
+      nuevaPestana: Boolean(args.nueva),
       forzarNueva: Boolean(args.nueva), permitirFallback: Boolean(args.fallback), timeoutMs: args.timeout ? Number(args.timeout) : CAPI_CONFIG.TIMEOUTS_MS.CHAT_POR_DEFECTO_MS,
       opciones: { razonamiento: args.razonamiento === undefined ? preferencias?.razonamiento : Boolean(args.razonamiento), busquedaWeb: args.busqueda === undefined ? preferencias?.busquedaWeb : Boolean(args.busqueda) },
       soloPoll: continuar,

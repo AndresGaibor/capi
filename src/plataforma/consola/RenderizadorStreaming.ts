@@ -3,6 +3,7 @@ import type { EventoStreaming } from "../../nucleo/chat/EventoStreaming";
 
 export class RenderizadorStreaming {
   private pensando = false;
+  private respuestaRenderizada = "";
 
   renderizar(evento: EventoStreaming): void {
     if (evento.tipo === "inicio" && evento.mensaje) {
@@ -38,7 +39,13 @@ export class RenderizadorStreaming {
         process.stdout.write("\n\n\x1b[32m💡 Respuesta:\x1b[0m\n");
         this.pensando = false;
       }
-      process.stdout.write(evento.contenido);
+      if (evento.reemplazo) {
+        this.respuestaRenderizada = evento.contenido;
+        process.stdout.write(`\r\x1b[2K${this.respuestaRenderizada}`);
+      } else {
+        this.respuestaRenderizada += evento.contenido;
+        process.stdout.write(evento.contenido);
+      }
       return;
     }
 

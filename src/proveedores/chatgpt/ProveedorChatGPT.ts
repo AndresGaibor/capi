@@ -32,7 +32,9 @@ export class ProveedorChatGPT implements ProveedorChat {
       yield { tipo: "inicio", mensaje: "Enviando prompt a ChatGPT..." };
       await this.pagina.enviar(peticion.prompt);
     }
-    const conversacionActual = await this.pagina.obtenerConversacionActual(peticion.conversacionId ? 1 : 40);
+    // En una conversación nueva ChatGPT puede tardar en actualizar /c/<id>;
+    // observar la respuesta no debe quedar bloqueado esperando esa URL.
+    const conversacionActual = await this.pagina.obtenerConversacionActual(peticion.conversacionId ? 1 : 5);
     if (conversacionActual && conversacionActual !== peticion.conversacionId) {
       yield { tipo: "conversacion", id: conversacionActual };
     }

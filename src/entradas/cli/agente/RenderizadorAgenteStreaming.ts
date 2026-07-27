@@ -37,7 +37,11 @@ export class RenderizadorAgenteStreaming {
   renderizar(evento: EventoStreaming): void {
     if (evento.tipo === "inicio" && evento.mensaje) this.progress.push(evento.mensaje);
     if (evento.tipo === "pensamiento") this.reasoning += evento.contenido;
-    if (evento.tipo === "respuesta") this.response += evento.contenido;
+    if (evento.tipo === "respuesta") {
+      this.response = evento.reemplazo
+        ? evento.contenido
+        : this.response + evento.contenido;
+    }
     if (evento.tipo === "imagen") this.response += `\n[Imagen: ${evento.url}]`;
     if (evento.tipo === "modelo") this.model = evento.nombre;
     if (evento.tipo === "conversacion") this.conversationId = evento.id;

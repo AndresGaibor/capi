@@ -19,8 +19,8 @@ test("ChatGPT extrae el último mensaje asistente y detecta generación", () => 
   expect(script).toContain("stop-button");
 });
 
-test("ChatGPT mantiene generación activa con data-stream-active", () => {
-  const dom = new JSDOM('<main data-stream-active><div data-message-author-role="assistant"><div class="markdown">C</div></div></main>', { runScripts: "outside-only" });
+test("ChatGPT mantiene generación activa con el botón Stop visible", () => {
+  const dom = new JSDOM('<main><button data-testid="stop-button"></button><div data-message-author-role="assistant"><div class="markdown">C</div></div></main>', { runScripts: "outside-only" });
   const estado = dom.window.eval(scriptEstadoStreamingChatGPT()) as any;
   expect(estado.response).toBe("C");
   expect(estado.isGenerating).toBeTrue();

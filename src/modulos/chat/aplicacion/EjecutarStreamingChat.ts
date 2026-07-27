@@ -2,6 +2,18 @@ import type { EventoStreaming } from "../../../nucleo/chat/EventoStreaming";
 import type { PeticionChat } from "../../../nucleo/chat/PeticionChat";
 import type { ProveedorChat } from "../../../nucleo/proveedores/ProveedorChat";
 
+function siguienteConTimeout<T>(iterador: AsyncIterator<T>, timeoutMs: number): Promise<IteratorResult<T>> {
+  return new Promise((resolver, rechazar) => {
+    const temporizador = setTimeout(() => {
+      rechazar(new Error(`La operación excedió ${timeoutMs} ms`));
+    }, timeoutMs);
+    iterador.next().then(
+      (resultado) => { clearTimeout(temporizador); resolver(resultado); },
+      (error) => { clearTimeout(temporizador); rechazar(error); },
+    );
+  });
+}
+
 export class EjecutarStreamingChat {
   respuesta = "";
   modelo?: string;
@@ -28,23 +40,9 @@ export class EjecutarStreamingChat {
         await iterador.return?.(undefined as never);
         throw new Error(`La operación excedió ${peticion.timeoutMs} ms`);
       }
-      const siguiente =
-        restante == null
-          ? await iterador.next()
-          : await Promise.race([
-              iterador.next(),
-              new Promise<never>((_, reject) =>
-                setTimeout(
-                  () =>
-                    reject(
-                      new Error(
-                        `La operación excedió ${peticion.timeoutMs} ms`,
-                      ),
-                    ),
-                  restante,
-                ),
-              ),
-            ]);
+      const siguiente = restante == null
+        ? await iterador.next()
+        : await siguienteConTimeout(iterador, restante);
       if (siguiente.done) break;
       const evento = siguiente.value;
       if (evento.tipo === "respuesta") this.respuesta = evento.reemplazo ? evento.contenido : this.respuesta + evento.contenido;

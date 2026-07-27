@@ -46,6 +46,21 @@ test("ChatGPT abre una pestaña cuando la sesión WebBridge no tiene una asociad
   expect(navegadas).toEqual(["https://chatgpt.com/"]);
 });
 
+test("ChatGPT abre una pestaña nueva cuando se solicita --nueva aunque ya exista conversación", async () => {
+  const navegadas: Array<{ url: string; nueva: boolean }> = [];
+  const transporte: any = {
+    async navegar(url: string, nueva: boolean) { navegadas.push({ url, nueva }); },
+    async cdp() {},
+    async evaluar(codigo: string) {
+      if (codigo === "location.href") return { value: "https://chatgpt.com/c/existente" };
+      if (codigo.includes(".ProseMirror")) return { value: true };
+      return { value: undefined };
+    },
+  };
+  await new ChatGPTPaginaChat(transporte).abrirConversacion(undefined, true);
+  expect(navegadas).toEqual([{ url: "https://chatgpt.com/", nueva: true }]);
+});
+
 test("ChatGPT con CDP no acepta solo el textarea antes de ProseMirror", async () => {
   let intentosProseMirror = 0;
   const transporte: any = {
@@ -143,6 +158,7 @@ test("todos los scripts generados por el envío de ChatGPT compilan", async () =
       }
       if (codigo.includes(".ProseMirror") && codigo.includes("focus")) return { value: true };
       if (codigo.includes("btn.click()")) return { value: true };
+      if (codigo.includes("const editor") && codigo.includes("generando")) return { value: { generando: true, editorVacio: false } };
       if (codigo.includes("Boolean(document.querySelector")) return { value: true };
       return { value: undefined };
     },

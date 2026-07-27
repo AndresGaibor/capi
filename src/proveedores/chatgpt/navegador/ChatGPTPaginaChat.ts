@@ -91,7 +91,7 @@ export class ChatGPTPaginaChat {
   async abrirConversacion(id?: string, nuevaPestana = false): Promise<void> {
     if (!id) {
       const actual = await this.obtenerConversacionActual();
-      if (!actual) await this.transporte.navegar("https://chatgpt.com/", nuevaPestana, "CAPI ChatGPT");
+      if (!actual || nuevaPestana) await this.transporte.navegar("https://chatgpt.com/", nuevaPestana, "CAPI ChatGPT");
       await this.esperarEditorChatGPT();
       return;
     }
@@ -166,7 +166,7 @@ export class ChatGPTPaginaChat {
   private async confirmarEnvio(alProgresar?: (progreso: ProgresoEspera) => void): Promise<void> {
     await esperarHasta<{ confirmado: boolean; error?: string }>({
       operacion: "confirmar envio a ChatGPT",
-      timeoutMs: 15000,
+      timeoutMs: 30000,
       intervaloMs: 200,
       intervaloFeedbackMs: 3000,
       alProgresar,
@@ -175,8 +175,15 @@ export class ChatGPTPaginaChat {
         if (estado.value?.error) return { confirmado: false, error: estado.value.error };
         if ((estado.value?.turns ?? 0) > this.asistentesAntes) return { confirmado: true };
         if (estado.value?.response !== this.respuestaAntes && estado.value?.response !== "") return { confirmado: true };
-        const detenido = await this.transporte.evaluar<boolean>(`Boolean(document.querySelector(${JSON.stringify(SELECTORES_CHATGPT.detener)}))`);
-        if (detenido.value) return { confirmado: true };
+        const señales = await this.transporte.evaluar<{ generando: boolean; editorVacio: boolean }>(`(() => {
+          const editor = document.querySelector(${JSON.stringify(SELECTORES_CHATGPT.editor)});
+          const botonDetener = document.querySelector(${JSON.stringify(SELECTORES_CHATGPT.detener)});
+          return {
+            generando: botonDetener !== null,
+            editorVacio: editor instanceof HTMLElement && editor.textContent?.trim().length === 0,
+          };
+        })()`);
+        if (señales.value?.generando || señales.value?.editorVacio) return { confirmado: true };
         return { confirmado: false };
       },
       completado: (estado) => {
@@ -308,7 +315,7 @@ export class ChatGPTPaginaChat {
         anterior = estado.response;
         ultimoCambio = Date.now();
       }
-      if (estado.done && Date.now() - ultimoCambio >= CAPI_CONFIG.TIMEOUTS_MS.ESTABILIDAD_FIN_GENERICA) {
+      if (estado.done && !estado.isGenerating && (estado.response || estado.images?.length)) {
         if (estado.continueGenerating) {
           yield { tipo: "pausado", motivo: "ChatGPT ofrece continuar generando.", conversacionId: await this.obtenerConversacionActual() ?? undefined };
         } else {

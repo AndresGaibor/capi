@@ -75,8 +75,10 @@ export class ClienteWebBridge {
     await this.comando("find_tab", { url, active: true });
   }
   async seleccionarPestanaPorHost(host: string): Promise<boolean> {
-    const resultado = await this.comando<{ tabs?: Array<{ url?: string }> }>("list_tabs");
-    const pestaña = (resultado.tabs ?? []).find((tab) => tab.url?.includes(host));
+    const resultado = await this.comando<{ tabs?: Array<{ url?: string; active?: boolean }> }>("list_tabs");
+    const pestañas = resultado.tabs ?? [];
+    const compatibles = pestañas.filter((tab) => tab.url?.includes(host));
+    const pestaña = compatibles.find((tab) => tab.active) ?? compatibles[0];
     if (!pestaña?.url) return false;
     await this.comando("find_tab", { url: pestaña.url, active: false });
     return true;

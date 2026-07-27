@@ -68,6 +68,24 @@ test("reintenta en errores transitorios de red (ECONNREFUSED) y recupera", async
   expect(intentos).toBe(3);
 });
 
+test("selecciona la pestaña activa del proveedor antes que una pestaña antigua", async () => {
+  const acciones: Array<{ action: string; args: Record<string, unknown> }> = [];
+  const fetchFalso: any = async (_url: string, init: any) => {
+    const cuerpo = JSON.parse(init.body);
+    acciones.push(cuerpo);
+    if (cuerpo.action === "list_tabs") {
+      return new Response(JSON.stringify({ ok: true, data: { tabs: [
+        { url: "https://chatgpt.com/c/antigua", active: false },
+        { url: "https://chatgpt.com/c/actual", active: true },
+      ] } }));
+    }
+    return new Response(JSON.stringify({ ok: true, data: { success: true } }));
+  };
+  const c = new ClienteWebBridge("http://bridge", fetchFalso);
+  await c.seleccionarPestanaPorHost("chatgpt.com");
+  expect(acciones.at(-1)?.args).toEqual({ url: "https://chatgpt.com/c/actual", active: false });
+});
+
 test("NO reintenta en WebBridgeError (error de la aplicación)", async () => {
   let intentos = 0;
   const fetchFalso: any = async () => {
