@@ -139,7 +139,7 @@ export class ChatGPTPaginaChat {
     try { await this.transporte.cdp("Page.setWebLifecycleState", { state: "active" }); } catch {}
   }
 
-  async enviar(prompt: string): Promise<void> {
+  async enviar(prompt: string, timeoutConfirmacionMs = 30000): Promise<void> {
     if (this.ocupado) throw new ErrorPaginaProveedor("ChatGPT ya tiene una operacion en curso. Espera a que termine o cancela con Ctrl+C.");
     this.ocupado = true;
     try {
@@ -178,16 +178,16 @@ export class ChatGPTPaginaChat {
       } else {
         await this.transporte.evaluar(scriptEnviarPromptChatGPT(prompt));
       }
-      await this.confirmarEnvio();
+      await this.confirmarEnvio(undefined, timeoutConfirmacionMs);
     } finally {
       this.ocupado = false;
     }
   }
 
-  private async confirmarEnvio(alProgresar?: (progreso: ProgresoEspera) => void): Promise<void> {
+  private async confirmarEnvio(alProgresar?: (progreso: ProgresoEspera) => void, timeoutMs = 30000): Promise<void> {
     await esperarHasta<{ confirmado: boolean; error?: string }>({
       operacion: "confirmar envio a ChatGPT",
-      timeoutMs: 30000,
+      timeoutMs,
       intervaloMs: 200,
       intervaloFeedbackMs: 3000,
       alProgresar,

@@ -30,7 +30,7 @@ export class ProveedorChatGPT implements ProveedorChat {
       yield { tipo: "inicio", mensaje: "Continuando polling de ChatGPT..." };
     } else {
       yield { tipo: "inicio", mensaje: "Enviando prompt a ChatGPT..." };
-      await this.pagina.enviar(peticion.prompt);
+      await this.pagina.enviar(peticion.prompt, peticion.timeoutMs ?? 30000);
     }
     // En una conversación nueva ChatGPT puede tardar en actualizar /c/<id>;
     // observar la respuesta no debe quedar bloqueado esperando esa URL.
