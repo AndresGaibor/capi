@@ -196,15 +196,11 @@ export class ChatGPTPaginaChat {
         if (estado.value?.error) return { confirmado: false, error: estado.value.error };
         if ((estado.value?.turns ?? 0) > this.asistentesAntes) return { confirmado: true };
         if (estado.value?.response !== this.respuestaAntes && estado.value?.response !== "") return { confirmado: true };
-        const señales = await this.transporte.evaluar<{ generando: boolean; editorVacio: boolean }>(`(() => {
-          const editor = document.querySelector(${JSON.stringify(SELECTORES_CHATGPT.editor)});
+        const señales = await this.transporte.evaluar<{ generando: boolean }>(`(() => {
           const botonDetener = document.querySelector(${JSON.stringify(SELECTORES_CHATGPT.detener)});
-          return {
-            generando: botonDetener !== null,
-            editorVacio: editor instanceof HTMLElement && editor.textContent?.trim().length === 0,
-          };
+          return { generando: botonDetener !== null };
         })()`);
-        if (señales.value?.generando || señales.value?.editorVacio) return { confirmado: true };
+        if (señales.value?.generando) return { confirmado: true };
         return { confirmado: false };
       },
       completado: (estado) => {
@@ -331,7 +327,10 @@ export class ChatGPTPaginaChat {
         fallosConsecutivos++;
         if (fallosConsecutivos >= MAX_FALLOS_EVALUAR) {
           yield { tipo: "estado", estado: "desconectado", progresoDetectado: false, estrategia: "dom", detalles: `reintento ${fallosConsecutivos}` };
-          const conversacion = conversacionConocida ?? await this.obtenerConversacionActual();
+          let conversacion: string | null | undefined = conversacionConocida;
+          if (!conversacion) {
+            try { conversacion = await this.obtenerConversacionActual(); } catch { /* continuar con recuperación base */ }
+          }
           const urlRecuperacion = conversacion ? normalizarUrlConversacion(conversacion) : "https://chatgpt.com/";
           await this.transporte.recuperarPestana?.("chatgpt.com", urlRecuperacion);
           await this.activarPagina();

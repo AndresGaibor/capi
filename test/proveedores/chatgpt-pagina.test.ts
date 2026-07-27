@@ -159,7 +159,7 @@ test("todos los scripts generados por el envío de ChatGPT compilan", async () =
       }
       if (codigo.includes(".ProseMirror") && codigo.includes("focus")) return { value: true };
       if (codigo.includes("btn.click()")) return { value: true };
-      if (codigo.includes("const editor") && codigo.includes("generando")) return { value: { generando: true, editorVacio: false } };
+      if (codigo.includes("botonDetener") && codigo.includes("generando")) return { value: { generando: true } };
       if (codigo.includes("Boolean(document.querySelector")) return { value: true };
       return { value: undefined };
     },
