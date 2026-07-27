@@ -1,5 +1,5 @@
 import type { EventoStreaming } from "../../../nucleo/chat/EventoStreaming";
-import { crearSobreExito, serializarSalida, type FormatoSalida } from "./FormatoSalida";
+import { codigoSalidaParaError, crearSobreError, crearSobreExito, serializarSalida, type FormatoSalida } from "./FormatoSalida";
 
 const EVENTOS: Record<EventoStreaming["tipo"], string> = {
   inicio: "progress",
@@ -26,6 +26,8 @@ export class RenderizadorAgenteStreaming {
   private context?: Record<string, unknown>;
   private paused = false;
   private error?: string;
+  private terminalEmitido = false;
+  private codigoSalidaActual = 0;
 
   constructor(
     private readonly command: string,
@@ -48,16 +50,36 @@ export class RenderizadorAgenteStreaming {
     if (evento.tipo === "ejecucion") this.executionId = evento.id;
     if (evento.tipo === "contexto") this.context = { path: evento.ruta, bytes: evento.bytes, estimatedTokens: evento.tokensEstimados, includedFiles: evento.archivosIncluidos, omittedFiles: evento.omitidos, truncatedFiles: evento.truncados, fromCache: evento.desdeCache };
     if (evento.tipo === "pausado") this.paused = true;
-    if (evento.tipo === "error") this.error = evento.mensaje;
+    if (evento.tipo === "error") {
+      this.error = evento.mensaje;
+      this.terminalEmitido = true;
+      const sobre = crearSobreError(this.command, new Error(evento.mensaje), { requestId: this.requestId });
+      this.codigoSalidaActual = codigoSalidaParaError(sobre.error?.code);
+      if (this.format !== "jsonl") this.write(serializarSalida(sobre, this.format));
+    }
+    if (evento.tipo === "fin" || evento.tipo === "pausado") this.terminalEmitido = true;
 
     if (this.format === "jsonl") {
       this.write(JSON.stringify({ protocol: "capi.agent.v1", requestId: this.requestId, command: this.command, event: EVENTOS[evento.tipo], data: this.dataEvento(evento) }));
       return;
     }
-    if ((this.format === "json" || this.format === "markdown") && (evento.tipo === "fin" || evento.tipo === "pausado" || evento.tipo === "error")) {
+    if ((this.format === "json" || this.format === "markdown") && (evento.tipo === "fin" || evento.tipo === "pausado")) {
       this.write(serializarSalida(crearSobreExito(this.command, this.resultado(), { requestId: this.requestId }), this.format));
     }
   }
+
+  finalizar(): void {
+    if (this.terminalEmitido) return;
+    const sobre = crearSobreError(this.command, new Error("El stream terminó sin evento terminal"), { requestId: this.requestId });
+    this.codigoSalidaActual = codigoSalidaParaError(sobre.error?.code);
+    if (this.format === "jsonl") {
+      this.write(JSON.stringify({ protocol: "capi.agent.v1", requestId: this.requestId, command: this.command, event: "stream.error", data: sobre.error }));
+    } else {
+      this.write(serializarSalida(sobre, this.format));
+    }
+  }
+
+  get codigoSalida(): number { return this.codigoSalidaActual; }
 
   resultado() {
     return {

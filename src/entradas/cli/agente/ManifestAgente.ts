@@ -4,7 +4,7 @@ export interface EsquemaComandoAgente {
   name: string;
   description: string;
   examples?: string[];
-  inputSchema: { type: "object"; properties: Record<string, any>; required: string[]; additionalProperties: boolean };
+  inputSchema: { type: "object"; properties: Record<string, any>; required: string[]; additionalProperties: boolean; anyOf?: Record<string, any>[]; oneOf?: Record<string, any>[] };
   behavior: { nonInteractive: boolean; streaming: boolean; idempotent: boolean; sideEffects: string[]; longRunning?: boolean; defaultTimeoutMs?: number };
   errors: Array<{ code: string; retryable: boolean; recovery: string }>;
 }
@@ -20,7 +20,10 @@ const comandos: EsquemaComandoAgente[] = [
       'capi chat --proveedor qwen --background --output json "Investiga X"',
       'capi chat --proveedor qwen --dry-run --output json "Exploracion"',
     ],
-    inputSchema: { type: "object", additionalProperties: false, required: ["prompt"], properties: {
+     inputSchema: { type: "object", additionalProperties: false, required: [], oneOf: [
+       { required: ["prompt"], not: { required: ["continue"] } },
+       { required: ["continue"], properties: { continue: { const: true } }, not: { required: ["prompt"] } },
+     ], properties: {
        prompt: { type: "string", minLength: 1 }, provider: { type: "string", enum: ["qwen", "deepseek", "chatgpt"] }, model: { type: "string" }, conversationId: { type: "string" },
        newConversation: { type: "boolean", default: false }, continue: { type: "boolean", default: false, description: "Consultar una respuesta pendiente sin enviar otro mensaje." }, reasoning: { type: "boolean" }, webSearch: { type: "boolean" }, files: { type: "array", items: { type: "string" }, description: "Archivos, directorios o globs. Los textuales se empaquetan; imágenes y PDF se adjuntan nativamente." }, images: { type: "array", items: { type: "string" }, description: "Imágenes PNG, JPEG, WebP o GIF; nunca se convierten a texto." }, includeGitDiff: { type: "boolean", default: false }, automaticContext: { type: "boolean", default: false }, incrementalContext: { type: "boolean", default: false }, includeConversationSummary: { type: "boolean", default: false }, maxContextBytes: { type: "integer", minimum: 1024 }, bundleContext: { type: "boolean", default: true, description: "Combinar las fuentes en un único archivo antes de enviarlas." },
       fallback: { type: "boolean", default: true }, timeoutMs: { type: "integer", minimum: 1000 }, dryRun: { type: "boolean", default: false }, explain: { type: "boolean", default: false }, output,

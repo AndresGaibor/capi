@@ -14,6 +14,8 @@ test("crea un sobre de error recuperable con acciones", () => {
   expect(sobre.error?.code).toBe("ALTA_DEMANDA");
   expect(sobre.error?.retryable).toBeTrue();
   expect(codigoSalidaParaError(sobre.error?.code)).toBe(20);
+  expect(codigoSalidaParaError("WEBBRIDGE_TOOL_ERROR")).toBe(50);
+  expect(codigoSalidaParaError("WEBBRIDGE_SESSION_LOST")).toBe(50);
 });
 
 test("serializa markdown y json sin ANSI", () => {

@@ -14,7 +14,9 @@ test("descubre capacidades agent-first", () => {
 
 test("expone un esquema de chat completo y sin interacción", () => {
   const schema = obtenerEsquemaComando("chat.send");
-  expect(schema?.inputSchema.required).toContain("prompt");
+  expect(schema?.inputSchema.oneOf).toHaveLength(2);
+  expect(schema?.inputSchema.oneOf?.[0]?.required).toContain("prompt");
+  expect(schema?.inputSchema.oneOf?.[1]?.required).toContain("continue");
   expect(schema?.inputSchema.properties.output.enum).toContain("jsonl");
   expect(schema?.inputSchema.properties.bundleContext.default).toBeTrue();
   expect(schema?.behavior.nonInteractive).toBeTrue();

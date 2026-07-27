@@ -90,7 +90,7 @@ export function codigoSalidaParaError(codigo?: string): number {
   if (codigo === "MODELO_NO_DISPONIBLE") return 21;
   if (codigo === "SESION_NAVEGADOR") return 30;
   if (codigo === "PAGINA_PROVEEDOR") return 40;
-  if (codigo === "WEBBRIDGE") return 50;
+  if (codigo.startsWith("WEBBRIDGE")) return 50;
   if (codigo === "PROVEEDOR_NO_DISPONIBLE") return 60;
   return 1;
 }

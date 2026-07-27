@@ -147,7 +147,8 @@ export async function ejecutarChat(args: Record<string, unknown>): Promise<void>
     app.repositorioContexto.cerrar();
     const hijo = spawn(process.execPath, [process.argv[1]!, ...argumentos], { detached: true, stdio: "ignore", env: { ...process.env, CAPI_TASK_CHILD: "1", CAPI_TASK_ID: id } });
     hijo.unref();
-    process.stdout.write(`${JSON.stringify({ taskId:id, estado:"creada", comando:`capi tareas estado ${id}` })}\n`);
+    const sobre = crearSobreExito("chat.send", { taskId: id, estado: "creada", comando: `capi tareas estado ${id}` }, { requestId });
+    process.stdout.write(serializarSalida(sobre, formato === "human" ? "markdown" : formato) + "\n");
     return;
   }
 
@@ -188,6 +189,8 @@ export async function ejecutarChat(args: Record<string, unknown>): Promise<void>
       const renderizador = new RenderizadorAgenteStreaming("chat.send", formato, requestId);
       let pausada = false;
       for await (const evento of eventos) { pausada ||= evento.tipo === "pausado"; renderizador.renderizar(evento); }
+      renderizador.finalizar();
+      process.exitCode ||= renderizador.codigoSalida;
     }
   } catch (error) {
     if (tareaId) {
